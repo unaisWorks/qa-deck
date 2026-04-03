@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QA Deck — Local Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --green:      #1D9E75;
+  --green-dim:  #0F6E56;
+  --green-glow: rgba(29,158,117,0.12);
+  --green-line: rgba(29,158,117,0.3);
+  --bg:         #0c0d0e;
+  --bg-1:       #111213;
+  --bg-2:       #161718;
+  --bg-3:       #1c1d1f;
+  --border:     rgba(255,255,255,0.07);
+  --border-md:  rgba(255,255,255,0.12);
+  --text-1:     #f0f0ee;
+  --text-2:     #9a9a96;
+  --text-3:     #5a5a58;
+  --red:        #E24B4A;
+  --amber:      #d97706;
+  --blue:       #378ADD;
+  --mono:       'IBM Plex Mono', monospace;
+  --sans:       'IBM Plex Sans', sans-serif;
+  --radius:     6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--sans);
+  font-weight: 300;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── Scanline texture overlay ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Layout ── */
+.shell { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Topbar ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; height: 56px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: var(--green); display: flex; align-items: center; justify-content: center;
+}
+.logo-name { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text-1); letter-spacing: -0.3px; }
+.logo-name span { color: var(--green); }
+.topbar-center { display: flex; align-items: center; gap: 6px; }
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--bg-2);
+  font-family: var(--mono); font-size: 11px; color: var(--text-2);
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); transition: background 0.3s; }
+.status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-dot 2s ease-in-out infinite; }
+.status-dot.dead { background: var(--red); }
+@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 12px; font-family: var(--sans); font-weight: 400; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border-md); background: var(--bg-2); color: var(--text-2); text-decoration: none; }
+.btn:hover { background: var(--bg-3); color: var(--text-1); border-color: rgba(255,255,255,0.18); }
+.btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+.btn-green:hover { background: var(--green-dim); border-color: var(--green-dim); color: #fff; }
+
+/* ── Stats bar ── */
+.statsbar {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+.stat-cell {
+  padding: 20px 32px;
+  border-right: 1px solid var(--border);
+  position: relative; overflow: hidden;
+}
+.stat-cell:last-child { border-right: none; }
+.stat-cell::after {
+  content: ''; position: absolute; bottom: 0; left: 32px; right: 32px;
+  height: 1px; background: var(--green); transform: scaleX(0); transform-origin: left;
+  transition: transform 0.4s ease; transition-delay: var(--d, 0s);
+}
+.stat-cell.loaded::after { transform: scaleX(1); }
+.stat-label { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 28px; font-weight: 500; color: var(--text-1); line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+/* ── Main content ── */
+.main { flex: 1; padding: 32px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+/* ── Section header ── */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.section-title { font-family: var(--mono); font-size: 11px; color: var(--text-3); letter-spacing: 0.8px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; display: inline-block; width: 3px; height: 12px; background: var(--green); border-radius: 99px; }
+.toolbar { display: flex; align-items: center; gap: 8px; }
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 7px 12px 7px 32px; font-size: 12px; font-family: var(--mono);
+  color: var(--text-1); outline: none; width: 220px; transition: border-color 0.15s;
+}
+.search-input::placeholder { color: var(--text-3); }
+.search-input:focus { border-color: var(--green-line); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.filter-select {
+  background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 7px 10px; font-size: 12px; font-family: var(--mono); color: var(--text-2);
+  outline: none; cursor: pointer;
+}
+.filter-select:focus { border-color: var(--green-line); }
+
+/* ── Projects grid ── */
+.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+
+/* ── Project card ── */
+.project-card {
+  background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  animation: card-in 0.3s ease both;
+}
+.project-card:hover { border-color: var(--green-line); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px var(--green-line); }
+@keyframes card-in { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+
+.card-top { padding: 18px 20px 14px; }
+.card-type-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.page-type-badge {
+  font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 3px;
+  background: var(--green-glow); color: var(--green); border: 1px solid var(--green-line);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.card-time { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.card-name { font-size: 15px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-url { font-family: var(--mono); font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.card-divider { height: 1px; background: var(--border); margin: 0 20px; }
+
+.card-stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 14px 20px; gap: 8px; }
+.card-stat-item { text-align: center; }
+.card-stat-num { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--text-1); line-height: 1; }
+.card-stat-lbl { font-size: 10px; color: var(--text-3); margin-top: 3px; }
+
+.card-divider2 { height: 1px; background: var(--border); }
+
+.card-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
+.framework-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.fw-tag {
+  font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px;
+  background: var(--bg-3); color: var(--text-2); border: 1px solid var(--border);
+}
+.card-actions { display: flex; gap: 6px; }
+.icon-btn {
+  width: 28px; height: 28px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg-2); color: var(--text-2); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.icon-btn:hover { border-color: var(--border-md); color: var(--text-1); background: var(--bg-3); }
+.icon-btn.danger:hover { border-color: rgba(226,75,74,0.4); color: var(--red); background: rgba(226,75,74,0.1); }
+.icon-btn.export:hover { border-color: var(--green-line); color: var(--green); background: var(--green-glow); }
+
+/* ── Priority bars ── */
+.priority-bar { display: flex; gap: 2px; padding: 0 20px 14px; }
+.pri-seg { height: 3px; border-radius: 99px; flex: 1; }
+.pri-high { background: var(--red); }
+.pri-med  { background: var(--amber); }
+.pri-low  { background: var(--green); }
+.pri-none { background: var(--bg-3); }
+
+/* ── Empty state ── */
+.empty-state {
+  grid-column: 1/-1; text-align: center; padding: 80px 40px;
+  border: 1px dashed var(--border-md); border-radius: 10px; background: var(--bg-1);
+}
+.empty-icon { font-size: 40px; margin-bottom: 16px; filter: grayscale(1) opacity(0.3); }
+.empty-title { font-size: 16px; font-weight: 500; color: var(--text-2); margin-bottom: 8px; }
+.empty-sub { font-size: 13px; color: var(--text-3); max-width: 340px; margin: 0 auto 20px; }
+
+/* ── Loading shimmer ── */
+.shimmer-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; height: 220px; position: relative; }
+.shimmer-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.03) 50%, transparent 70%);
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* ── Detail drawer ── */
+.drawer-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  backdrop-filter: blur(4px);
+}
+.drawer-overlay.open { opacity: 1; pointer-events: all; }
+.drawer {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 680px; max-width: 95vw;
+  background: var(--bg-1); border-left: 1px solid var(--border);
+  z-index: 201; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
+}
+.drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 24px 28px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.drawer-title { font-size: 17px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; }
+.drawer-url { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.close-btn {
+  width: 32px; height: 32px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg-2); color: var(--text-2); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; margin-left: 12px; transition: all 0.15s; font-size: 16px;
+}
+.close-btn:hover { background: var(--bg-3); color: var(--text-1); }
+
+.drawer-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 28px; flex-shrink: 0; }
+.drawer-tab {
+  padding: 12px 16px; font-family: var(--mono); font-size: 11px; color: var(--text-3);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  letter-spacing: 0.5px; text-transform: uppercase; transition: all 0.15s;
+}
+.drawer-tab:hover { color: var(--text-2); }
+.drawer-tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+.drawer-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+/* ── Test case rows ── */
+.tc-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.tc-row:last-child { border-bottom: none; }
+.tc-row-id { font-family: var(--mono); font-size: 10px; color: var(--text-3); min-width: 48px; padding-top: 2px; }
+.tc-row-body { flex: 1; min-width: 0; }
+.tc-row-title { font-size: 13px; color: var(--text-1); margin-bottom: 3px; }
+.tc-row-meta { display: flex; gap: 6px; }
+.tc-pri { font-family: var(--mono); font-size: 9px; padding: 1px 6px; border-radius: 3px; }
+.tc-pri-high { background: rgba(226,75,74,0.1); color: #f87171; border: 1px solid rgba(226,75,74,0.2); }
+.tc-pri-medium { background: rgba(217,119,6,0.1); color: #fbbf24; border: 1px solid rgba(217,119,6,0.2); }
+.tc-pri-low { background: var(--green-glow); color: var(--green); border: 1px solid var(--green-line); }
+.tc-cat { font-family: var(--mono); font-size: 9px; padding: 1px 6px; border-radius: 3px; background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border); }
+
+/* ── Script viewer ── */
+.script-file-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.script-file-tab {
+  font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg-2); color: var(--text-3);
+  cursor: pointer; transition: all 0.15s;
+}
+.script-file-tab:hover { color: var(--text-2); border-color: var(--border-md); }
+.script-file-tab.active { background: var(--green-glow); color: var(--green); border-color: var(--green-line); }
+
+.code-block {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.code-block-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--bg-2);
+}
+.code-block-filename { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.copy-code-btn {
+  font-family: var(--mono); font-size: 10px; padding: 3px 9px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--bg-3); color: var(--text-3);
+  cursor: pointer; transition: all 0.15s;
+}
+.copy-code-btn:hover { color: var(--green); border-color: var(--green-line); }
+.code-pre {
+  padding: 16px; font-family: var(--mono); font-size: 11px; color: var(--text-2);
+  line-height: 1.7; overflow-x: auto; white-space: pre; max-height: 420px; overflow-y: auto;
+}
+
+/* ── Re-export panel ── */
+.export-section { margin-bottom: 24px; }
+.export-label { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+.fw-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.fw-option {
+  padding: 10px 8px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg-2); color: var(--text-2); text-align: center; cursor: pointer;
+  font-size: 11px; transition: all 0.15s; line-height: 1.4;
+}
+.fw-option:hover { border-color: var(--border-md); color: var(--text-1); }
+.fw-option.selected { border-color: var(--green-line); background: var(--green-glow); color: var(--green); }
+.fw-option strong { display: block; font-size: 12px; font-family: var(--mono); margin-bottom: 1px; }
+
+.regen-notice { font-size: 12px; color: var(--text-3); padding: 10px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-2); margin-bottom: 16px; line-height: 1.6; }
+.regen-notice strong { color: var(--text-2); }
+
+.drawer-footer {
+  padding: 16px 28px; border-top: 1px solid var(--border); flex-shrink: 0;
+  display: flex; gap: 10px; background: var(--bg-1);
+}
+.drawer-footer .btn { flex: 1; justify-content: center; }
+
+/* ── Confirm dialog ── */
+.confirm-dialog {
+  position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.8); opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.confirm-dialog.open { opacity: 1; pointer-events: all; }
+.confirm-box {
+  background: var(--bg-2); border: 1px solid var(--border-md); border-radius: 10px;
+  padding: 28px; width: 360px; text-align: center;
+}
+.confirm-icon { font-size: 32px; margin-bottom: 12px; }
+.confirm-title { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+.confirm-sub { font-size: 13px; color: var(--text-2); margin-bottom: 24px; line-height: 1.5; }
+.confirm-btns { display: flex; gap: 10px; }
+.btn-danger { background: rgba(226,75,74,0.15); color: var(--red); border: 1px solid rgba(226,75,74,0.3); }
+.btn-danger:hover { background: rgba(226,75,74,0.25); color: #f87171; }
+
+/* ── Toast ── */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 400; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: var(--radius);
+  font-size: 13px; min-width: 260px; max-width: 380px;
+  border: 1px solid; animation: toast-in 0.25s ease;
+  font-family: var(--sans);
+}
+@keyframes toast-in { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
+.toast-success { background: rgba(29,158,117,0.12); border-color: var(--green-line); color: var(--green); }
+.toast-error   { background: rgba(226,75,74,0.12); border-color: rgba(226,75,74,0.3); color: #f87171; }
+.toast-info    { background: rgba(55,138,221,0.12); border-color: rgba(55,138,221,0.3); color: var(--blue); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .statsbar { grid-template-columns: repeat(2,1fr); }
+  .main { padding: 20px 16px; }
+  .topbar { padding: 0 16px; }
+  .topbar-center { display: none; }
+  .drawer { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M3 5h6M3 11h8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="logo-name">QA <span>Deck</span> / local engine</span>
+    </div>
+    <div class="topbar-center">
+      <div class="status-pill">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">connecting...</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a href="/recorder.html" class="btn btn-green">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" fill="currentColor" opacity=".3"/><circle cx="6" cy="6" r="3" fill="currentColor"/></svg>
+        Open Capture Workspace
+      </a>
+      <a href="http://localhost:3747/api/health" target="_blank" class="btn">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 4v2l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        API Health
+      </a>
+      <button class="btn btn-green" onclick="refreshProjects()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M10 6A4 4 0 116 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Stats bar -->
+  <div class="statsbar" id="statsbar">
+    <div class="stat-cell" style="--d:0.1s">
+      <div class="stat-label">Total projects</div>
+      <div class="stat-value" id="stat-projects">—</div>
+      <div class="stat-sub">saved to disk</div>
+    </div>
+    <div class="stat-cell" style="--d:0.2s">
+      <div class="stat-label">Test cases</div>
+      <div class="stat-value" id="stat-tcs">—</div>
+      <div class="stat-sub">across all projects</div>
+    </div>
+    <div class="stat-cell" style="--d:0.3s">
+      <div class="stat-label">Pages scanned</div>
+      <div class="stat-value" id="stat-pages">—</div>
+      <div class="stat-sub">unique URLs</div>
+    </div>
+    <div class="stat-cell" style="--d:0.4s">
+      <div class="stat-label">Last activity</div>
+      <div class="stat-value" id="stat-last" style="font-size:16px;padding-top:6px">—</div>
+      <div class="stat-sub" id="stat-last-sub">—</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="section-header">
+      <div class="section-title">Local project cache</div>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <svg class="search-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9.5 9.5L12 12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <input class="search-input" id="search-input" type="text" placeholder="search projects..." oninput="filterProjects()"/>
+        </div>
+        <select class="filter-select" id="type-filter" onchange="filterProjects()">
+          <option value="">all types</option>
+          <option value="login">login</option>
+          <option value="dashboard">dashboard</option>
+          <option value="registration">registration</option>
+          <option value="checkout">checkout</option>
+          <option value="search">search</option>
+          <option value="settings">settings</option>
+          <option value="form">form</option>
+          <option value="general">general</option>
+        </select>
+        <select class="filter-select" id="sort-filter" onchange="filterProjects()">
+          <option value="newest">newest first</option>
+          <option value="oldest">oldest first</option>
+          <option value="name">by name</option>
+          <option value="tcs">most test cases</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="projects-grid" id="projects-grid">
+      <!-- shimmer placeholders -->
+      <div class="shimmer-card"></div>
+      <div class="shimmer-card"></div>
+      <div class="shimmer-card"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Detail drawer -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title">—</div>
+      <div class="drawer-url" id="drawer-url">—</div>
+    </div>
+    <button class="close-btn" onclick="closeDrawer()">×</button>
+  </div>
+  <div class="drawer-tabs">
+    <div class="drawer-tab active" data-tab="testcases" onclick="switchDrawerTab('testcases',this)">Test cases</div>
+    <div class="drawer-tab" data-tab="scripts" onclick="switchDrawerTab('scripts',this)">Scripts</div>
+    <div class="drawer-tab" data-tab="cicd" onclick="switchDrawerTab('cicd',this)">CI/CD</div>
+    <div class="drawer-tab" data-tab="export" onclick="switchDrawerTab('export',this)">Re-export</div>
+  </div>
+  <div class="drawer-body" id="drawer-body"><!-- populated --></div>
+  <div class="drawer-footer">
+    <button class="btn" onclick="closeDrawer()">Close</button>
+    <button class="btn btn-green" id="drawer-dl-btn" onclick="downloadProject()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M2 10h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download ZIP
+    </button>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-dialog" id="confirm-dialog">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑</div>
+    <div class="confirm-title">Delete project?</div>
+    <div class="confirm-sub" id="confirm-sub">This will permanently remove this project and all its test cases.</div>
+    <div class="confirm-btns">
+      <button class="btn" style="flex:1;justify-content:center" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" style="flex:1;justify-content:center" id="confirm-ok-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const API = 'http://localhost:3747';
+let allProjects = [];
+let currentProject = null;
+let currentDrawerTab = 'testcases';
+let currentScriptFile = 'base';
+let selectedFramework = 'selenium-python';
+let pendingDeleteId = null;
+let apiKey = localStorage.getItem('qa_api_key') || '';
+
+// ── Boot ──────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  await checkServer();
+  await loadProjects();
+});
+
+async function checkServer() {
+  try {
+    const res = await fetch(`${API}/api/health`);
+    const data = await res.json();
+    dot('live');
+    document.getElementById('status-text').textContent = `v${data.version} · ${data.projects} projects`;
+  } catch {
+    dot('dead');
+    document.getElementById('status-text').textContent = 'server offline';
+    showToast('Backend not running. Start with: node server.js', 'error');
+  }
+}
+
+function dot(state) {
+  const d = document.getElementById('status-dot');
+  d.className = 'status-dot ' + state;
+}
+
+// ── Load projects ─────────────────────────────────────────────────────
+async function loadProjects() {
+  try {
+    const res = await fetch(`${API}/api/projects`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    allProjects = data.projects || [];
+    updateStats();
+    renderGrid(allProjects);
+  } catch (err) {
+    document.getElementById('projects-grid').innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-icon">⚠</div>
+        <div class="empty-title">Could not load projects</div>
+        <div class="empty-sub">${err.message}</div>
+        <button class="btn btn-green" onclick="loadProjects()">Try again</button>
+      </div>`;
+  }
+}
+
+async function refreshProjects() {
+  document.getElementById('projects-grid').innerHTML = '<div class="shimmer-card"></div>'.repeat(3);
+  await checkServer();
+  await loadProjects();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────
+function updateStats() {
+  const totalTCs = allProjects.reduce((n, p) => n + (p.testCaseCount || 0), 0);
+  const totalPages = allProjects.reduce((n, p) => n + (p.pageCount || 1), 0);
+  const lastProject = allProjects.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt))[0];
+
+  document.getElementById('stat-projects').textContent = allProjects.length;
+  document.getElementById('stat-tcs').textContent = totalTCs;
+  document.getElementById('stat-pages').textContent = totalPages;
+
+  if (lastProject) {
+    const d = new Date(lastProject.savedAt);
+    document.getElementById('stat-last').textContent = d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+    document.getElementById('stat-last-sub').textContent = timeAgo(lastProject.savedAt);
+  }
+
+  // Animate bottom lines
+  setTimeout(() => document.querySelectorAll('.stat-cell').forEach(c => c.classList.add('loaded')), 100);
+}
+
+// ── Render grid ───────────────────────────────────────────────────────
+function renderGrid(projects) {
+  const grid = document.getElementById('projects-grid');
+
+  if (!projects.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <div class="empty-title">No projects yet</div>
+        <div class="empty-sub">This local engine stores backend artifacts only. Use qadeck.com for your main project dashboard and open the extension when you need to capture new work.</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = projects.map((p, i) => buildCard(p, i)).join('');
+}
+
+function buildCard(p, i) {
+  const pageType = p.pageType || p.pages?.[0]?.url?.split('/').filter(Boolean).pop() || 'page';
+  const tcs = p.testCaseCount || p.pages?.reduce((n, pg) => n + (pg.testCases?.length || 0), 0) || 0;
+  const highCount  = p.highPriority  || 0;
+  const medCount   = p.medPriority   || 0;
+  const lowCount   = p.lowPriority   || tcs;
+  const frameworks = p.frameworks || (p.pages?.[0]?.scripts ? Object.keys(p.pages[0].scripts).slice(0,2) : ['selenium-python']);
+  const url = p.url || p.pages?.[0]?.url || '—';
+  const saved = timeAgo(p.savedAt);
+  const delay = (i * 0.05).toFixed(2);
+
+  // Priority bar widths
+  const total = highCount + medCount + lowCount || 1;
+  const highW = Math.round(highCount/total*100);
+  const medW  = Math.round(medCount/total*100);
+  const lowW  = Math.round(lowCount/total*100);
+  const noneW = 100 - highW - medW - lowW;
+
+  return `
+  <div class="project-card" style="animation-delay:${delay}s" onclick="openProject('${p.id}')">
+    <div class="card-top">
+      <div class="card-type-row">
+        <span class="page-type-badge">${pageType}</span>
+        <span class="card-time">${saved}</span>
+      </div>
+      <div class="card-name">${p.name || url}</div>
+      <div class="card-url">${url}</div>
+    </div>
+    <div class="card-divider"></div>
+    <div class="card-stats">
+      <div class="card-stat-item">
+        <div class="card-stat-num">${tcs}</div>
+        <div class="card-stat-lbl">test cases</div>
+      </div>
+      <div class="card-stat-item">
+        <div class="card-stat-num">${p.pageCount || 1}</div>
+        <div class="card-stat-lbl">pages</div>
+      </div>
+      <div class="card-stat-item">
+        <div class="card-stat-num">${highCount}</div>
+        <div class="card-stat-lbl">high pri</div>
+      </div>
+    </div>
+    <div class="priority-bar">
+      <div class="pri-seg pri-high" style="flex:${highW||0.5}"></div>
+      <div class="pri-seg pri-med"  style="flex:${medW||0.5}"></div>
+      <div class="pri-seg pri-low"  style="flex:${lowW||0.5}"></div>
+      ${noneW > 0 ? `<div class="pri-seg pri-none" style="flex:${noneW}"></div>` : ''}
+    </div>
+    <div class="card-divider2"></div>
+    <div class="card-footer">
+      <div class="framework-tags">
+        ${(frameworks||['selenium-python']).map(fw => `<span class="fw-tag">${fwShort(fw)}</span>`).join('')}
+      </div>
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <button class="icon-btn export" title="Download ZIP" onclick="quickDownload('${p.id}')">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v8M4 6.5l2.5 2.5 2.5-2.5M2 11h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn danger" title="Delete" onclick="confirmDelete('${p.id}', '${(p.name||'this project').replace(/'/g,"\\'")}')">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 3.5h9M5 3.5V2h3v1.5M5.5 6v4M7.5 6v4M3 3.5l.5 7h6l.5-7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Filter / sort ─────────────────────────────────────────────────────
+function filterProjects() {
+  const query = document.getElementById('search-input').value.toLowerCase();
+  const typeFilter = document.getElementById('type-filter').value;
+  const sort = document.getElementById('sort-filter').value;
+
+  let filtered = allProjects.filter(p => {
+    const matchQ = !query || (p.name||'').toLowerCase().includes(query) || (p.url||'').toLowerCase().includes(query);
+    const matchT = !typeFilter || (p.pageType||'').includes(typeFilter);
+    return matchQ && matchT;
+  });
+
+  if (sort === 'newest') filtered.sort((a,b) => new Date(b.savedAt) - new Date(a.savedAt));
+  else if (sort === 'oldest') filtered.sort((a,b) => new Date(a.savedAt) - new Date(b.savedAt));
+  else if (sort === 'name') filtered.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  else if (sort === 'tcs') filtered.sort((a,b) => (b.testCaseCount||0) - (a.testCaseCount||0));
+
+  renderGrid(filtered);
+}
+
+// ── Open project drawer ───────────────────────────────────────────────
+async function openProject(id) {
+  try {
+    const res = await fetch(`${API}/api/projects/${id}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    currentProject = data.project;
+
+    document.getElementById('drawer-title').textContent = currentProject.name || currentProject.url;
+    document.getElementById('drawer-url').textContent = currentProject.url || '—';
+    document.getElementById('drawer-overlay').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+
+    switchDrawerTab('testcases', document.querySelector('.drawer-tab[data-tab="testcases"]'));
+  } catch (err) {
+    showToast('Failed to load project: ' + err.message, 'error');
+  }
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  currentProject = null;
+}
+
+// ── Drawer tabs ───────────────────────────────────────────────────────
+function switchDrawerTab(tab, el) {
+  currentDrawerTab = tab;
+  document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderDrawerBody();
+}
+
+function renderDrawerBody() {
+  const body = document.getElementById('drawer-body');
+  if (!currentProject) return;
+
+  // Flatten all test cases across pages
+  const allTCs = (currentProject.pages || []).flatMap(pg => pg.testCases || []);
+  // Get scripts from first page that has them
+  const scriptsPage = (currentProject.pages || []).find(pg => pg.scripts);
+  const scripts = scriptsPage?.scripts || null;
+
+  if (currentDrawerTab === 'testcases') {
+    if (!allTCs.length) {
+      body.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px;font-size:13px">No test cases found in this project.</div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${allTCs.length} test cases</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--green)">${allTCs.filter(t=>t.approved!==false).length} approved</span>
+      </div>
+      ${allTCs.map(tc => `
+        <div class="tc-row">
+          <div class="tc-row-id">${tc.id}</div>
+          <div class="tc-row-body">
+            <div class="tc-row-title">${tc.title}</div>
+            <div class="tc-row-meta">
+              <span class="tc-pri tc-pri-${tc.priority}">${tc.priority}</span>
+              <span class="tc-cat">${tc.category||'functional'}</span>
+            </div>
+          </div>
+        </div>`).join('')}`;
+  }
+
+  else if (currentDrawerTab === 'scripts') {
+    if (!scripts) {
+      body.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px;font-size:13px">No scripts generated for this project yet.<br><br>Use the extension to generate scripts, or use the Re-export tab.</div>`;
+      return;
+    }
+    const fileKeys = Object.keys(scripts);
+    currentScriptFile = currentScriptFile || fileKeys[0];
+
+    body.innerHTML = `
+      <div class="script-file-tabs">
+        ${fileKeys.map(k => `<div class="script-file-tab ${k===currentScriptFile?'active':''}" onclick="selectScriptFile('${k}',this)">${scripts[k].filename}</div>`).join('')}
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="code-block-filename">${scripts[currentScriptFile]?.filename||'—'}</span>
+          <button class="copy-code-btn" onclick="copyCode()">Copy</button>
+        </div>
+        <pre class="code-pre" id="code-pre-content">${escHtml(scripts[currentScriptFile]?.content||'')}</pre>
+      </div>`;
+  }
+
+  else if (currentDrawerTab === 'cicd') {
+    renderCICDTab(body);
+  }
+
+  else if (currentDrawerTab === 'export') {
+    body.innerHTML = `
+      <div class="export-section">
+        <div class="export-label">Target framework</div>
+        <div class="fw-grid">
+          ${[['selenium-python','Selenium','Python'],['selenium-java','Selenium','Java'],['playwright-python','Playwright','Python'],['playwright-typescript','Playwright','TypeScript']].map(([val,fw,lang]) => `
+            <div class="fw-option ${val===selectedFramework?'selected':''}" onclick="selectFw('${val}',this)">
+              <strong>${fw}</strong>${lang}
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="export-section">
+        <div class="export-label">API key</div>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="api-key-field" placeholder="sk-ant-..." value="${apiKey}"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:var(--mono);font-size:12px;color:var(--text-1);outline:none;"
+            oninput="apiKey=this.value;localStorage.setItem('qa_api_key',this.value)"
+          />
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:5px">Stored locally in your browser. Never sent to any server except Anthropic.</div>
+      </div>
+
+      <div class="regen-notice">
+        <strong>Re-generate scripts</strong> will call Claude with the existing test cases and produce fresh scripts in the selected framework. This uses your API key and takes 15–30 seconds.
+      </div>`;
+  }
+}
+
+function selectScriptFile(key, el) {
+  currentScriptFile = key;
+  document.querySelectorAll('.script-file-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const scripts = (currentProject.pages||[]).find(pg=>pg.scripts)?.scripts;
+  if (scripts?.[key]) {
+    document.querySelector('.code-block-filename').textContent = scripts[key].filename;
+    document.getElementById('code-pre-content').textContent = scripts[key].content;
+  }
+}
+
+function selectFw(val, el) {
+  selectedFramework = val;
+  document.querySelectorAll('.fw-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function copyCode() {
+  const pre = document.getElementById('code-pre-content');
+  if (!pre) return;
+  try {
+    await navigator.clipboard.writeText(pre.textContent);
+    const btn = document.querySelector('.copy-code-btn');
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 1500);
+  } catch { showToast('Copy failed', 'error'); }
+}
+
+// ── Download ZIP ──────────────────────────────────────────────────────
+async function downloadProject() {
+  if (!currentProject) return;
+
+  if (currentDrawerTab === 'export') {
+    await regenAndDownload();
+  } else {
+    await buildAndDownloadZip(currentProject);
+  }
+}
+
+async function quickDownload(id) {
+  try {
+    const res = await fetch(`${API}/api/projects/${id}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    await buildAndDownloadZip(data.project);
+  } catch (err) {
+    showToast('Download failed: ' + err.message, 'error');
+  }
+}
+
+async function buildAndDownloadZip(project) {
+  const scriptsPage = (project.pages||[]).find(pg => pg.scripts);
+  if (!scriptsPage?.scripts) {
+    showToast('No scripts found — use Re-export tab to generate them', 'info');
+    return;
+  }
+
+  showToast('Building ZIP...', 'info');
+
+  try {
+    const zip = new JSZip();
+    const scripts = scriptsPage.scripts;
+    const pageType = project.pageType || 'page';
+    const fileKeys = ['base','pageObject','testData','tests','config'];
+
+    fileKeys.forEach(key => {
+      const f = scripts[key];
+      if (!f) return;
+      if (key === 'pageObject') zip.file(`pages/${f.filename}`, f.content);
+      else if (key === 'tests') zip.file(`tests/${f.filename}`, f.content);
+      else zip.file(f.filename, f.content);
+    });
+
+    // Add test cases as JSON reference
+    const allTCs = (project.pages||[]).flatMap(pg => pg.testCases||[]);
+    if (allTCs.length) zip.file('test_cases.json', JSON.stringify(allTCs, null, 2));
+
+    // Add metadata
+    zip.file('README.md', buildReadme(project, scriptsPage.framework||selectedFramework));
+
+    const ext = selectedFramework.includes('java') ? 'java' : selectedFramework.includes('typescript') ? 'ts' : 'py';
+    if (ext === 'ts') zip.file('package.json', JSON.stringify({ name: `qa-${pageType}`, scripts: { test: 'playwright test' }, devDependencies: { '@playwright/test': '^1.40.0' } }, null, 2));
+    else if (!selectedFramework.includes('java')) zip.file('requirements.txt', selectedFramework.includes('playwright') ? 'pytest==7.4.3\npytest-playwright==0.4.3\nplaywright==1.40.0\n' : 'selenium==4.15.2\npytest==7.4.3\nwebdriver-manager==4.0.1\n');
+
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    triggerDownload(blob, `qa_deck_${pageType}_${Date.now()}.zip`);
+    showToast('ZIP downloaded!', 'success');
+  } catch (err) {
+    showToast('ZIP error: ' + err.message, 'error');
+  }
+}
+
+async function regenAndDownload() {
+  if (!apiKey) { showToast('Enter your Anthropic API key first', 'error'); return; }
+  if (!currentProject) return;
+
+  const allTCs = (currentProject.pages||[]).flatMap(pg => pg.testCases||[]).filter(t => t.approved !== false);
+  if (!allTCs.length) { showToast('No approved test cases to generate scripts from', 'error'); return; }
+
+  const btn = document.getElementById('drawer-dl-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="animation:spin 0.8s linear infinite"><path d="M10 6A4 4 0 116 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Generating...';
+  showToast('Calling Claude API — this takes 15–30s...', 'info');
+
+  try {
+    const res = await fetch(`${API}/api/generate-script`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testCases: allTCs, pageData: currentProject.pages?.[0], framework: selectedFramework, apiKey }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    // Patch project with new scripts
+    if (currentProject.pages?.[0]) {
+      currentProject.pages[0].scripts = data.scripts;
+      currentProject.pages[0].framework = selectedFramework;
+    }
+
+    // Save updated project
+    await fetch(`${API}/api/save-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: currentProject }),
+    });
+
+    await buildAndDownloadZip(currentProject);
+    showToast('Scripts regenerated and downloaded!', 'success');
+  } catch (err) {
+    showToast('Regen failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M2 10h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> Download ZIP';
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────
+function confirmDelete(id, name) {
+  pendingDeleteId = id;
+  document.getElementById('confirm-sub').textContent = `"${name}" and all its test cases will be permanently deleted.`;
+  document.getElementById('confirm-dialog').classList.add('open');
+  document.getElementById('confirm-ok-btn').onclick = () => deleteProject(id);
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-dialog').classList.remove('open');
+  pendingDeleteId = null;
+}
+
+async function deleteProject(id) {
+  closeConfirm();
+  try {
+    const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Delete failed');
+    allProjects = allProjects.filter(p => p.id !== id);
+    updateStats();
+    filterProjects();
+    showToast('Project deleted', 'success');
+  } catch (err) {
+    showToast('Delete failed: ' + err.message, 'error');
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function buildReadme(project, framework) {
+  const allTCs = (project.pages||[]).flatMap(pg => pg.testCases||[]);
+  const hasCICD = !!cicdConfigs;
+  return `# QA Deck — ${project.name || project.url}
+
+**URL:** ${project.url}  
+**Framework:** ${framework}  
+**Test cases:** ${allTCs.length}  
+**Exported:** ${new Date().toISOString()}
+
+## Project Structure
+\`\`\`
+pages/                          ← Page Object Models
+tests/                          ← Test files
+test_cases.json                 ← All test cases (reference)
+${hasCICD ? '.github/workflows/qa-tests.yml  ← GitHub Actions\nJenkinsfile                     ← Jenkins pipeline\ndocker-compose.ci.yml           ← Docker CI simulation\nMakefile                        ← Convenience targets\n' : ''}requirements.txt / package.json
+\`\`\`
+
+## Running locally
+${framework === 'selenium-python' ? '```bash\npip install -r requirements.txt\npytest tests/ -v\n```' :
+  framework === 'playwright-python' ? '```bash\npip install -r requirements.txt\nplaywright install\npytest tests/ -v\n```' :
+  framework === 'playwright-typescript' ? '```bash\nnpm install\nnpx playwright install\nnpx playwright test\n```' :
+  '```bash\nmvn test\n```'}
+
+${hasCICD ? `## CI/CD\n\n**GitHub Actions** — push to \`main\` or \`develop\` triggers the pipeline automatically.\n\n**Jenkins** — import the \`Jenkinsfile\` into a new Pipeline job. Set the \`BASE_URL\` credential.\n\n**Docker** — simulate CI locally:\n\`\`\`bash\nmake docker-test\n\`\`\`\n` : ''}
+
+*Generated by QA Deck*
+`;
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function fwShort(fw) {
+  return { 'selenium-python':'Sel/Py', 'selenium-java':'Sel/Java', 'playwright-python':'PW/Py', 'playwright-typescript':'PW/TS' }[fw] || fw;
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—';
+  const secs = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (secs < 60) return 'just now';
+  if (secs < 3600) return `${Math.floor(secs/60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs/3600)}h ago`;
+  if (secs < 604800) return `${Math.floor(secs/86400)}d ago`;
+  return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg, type='info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">${type==='success'?'<path d="M2 7l3.5 3.5L12 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>':type==='error'?'<circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M7 4v4M7 9.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>':'<circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'}</svg>${msg}`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(20px)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 3500);
+}
+
+
+// ── CI/CD state ───────────────────────────────────────────────────────────────
+let cicdOptions = {
+  browsers: ['chromium'],
+  parallel: false,
+  reporters: ['html', 'junit'],
+  slackWebhook: false,
+  emailNotify: false,
+  branches: ['main', 'develop'],
+  prTrigger: true,
+  useAllure: false,
+};
+let cicdConfigs = null;
+let cicdFile = 'githubActions';
+
+// ── Render CI/CD tab ──────────────────────────────────────────────────────────
+function renderCICDTab(body) {
+  if (!currentProject) return;
+
+  const fw = selectedFramework;
+  const isPlaywright = fw.startsWith('playwright');
+  const browserOptions = isPlaywright
+    ? [['chromium','Chromium'],['firefox','Firefox'],['webkit','WebKit']]
+    : [['chrome','Chrome'],['firefox','Firefox']];
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Framework (read from re-export selection) -->
+      <div>
+        <div class="export-label">Framework</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--green);padding:7px 10px;background:var(--green-glow);border:1px solid var(--green-line);border-radius:var(--radius);display:inline-block">${fw}</div>
+        <span style="font-size:11px;color:var(--text-3);margin-left:8px">Change in Re-export tab</span>
+      </div>
+
+      <!-- Browsers -->
+      <div>
+        <div class="export-label">Browsers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${browserOptions.map(([val, lbl]) => `
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--text-2);padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-2)">
+              <input type="checkbox" value="${val}" ${cicdOptions.browsers.includes(val)?'checked':''} onchange="toggleBrowser('${val}',this.checked)" style="accent-color:var(--green)"/>
+              ${lbl}
+            </label>`).join('')}
+        </div>
+      </div>
+
+      <!-- Options grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.parallel?'checked':''} onchange="cicdOptions.parallel=this.checked" style="accent-color:var(--green)"/>
+          Parallel browsers (matrix)
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.prTrigger?'checked':''} onchange="cicdOptions.prTrigger=this.checked" style="accent-color:var(--green)"/>
+          Trigger on pull requests
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.slackWebhook?'checked':''} onchange="cicdOptions.slackWebhook=this.checked" style="accent-color:var(--green)"/>
+          Slack notifications
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.emailNotify?'checked':''} onchange="cicdOptions.emailNotify=this.checked" style="accent-color:var(--green)"/>
+          Email on failure
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.useAllure?'checked':''} onchange="cicdOptions.useAllure=this.checked" style="accent-color:var(--green)"/>
+          Allure reporting
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);cursor:pointer">
+          <input type="checkbox" ${cicdOptions.reporters.includes('junit')?'checked':''} onchange="toggleReporter('junit',this.checked)" style="accent-color:var(--green)"/>
+          JUnit XML output
+        </label>
+      </div>
+
+      <!-- Branches -->
+      <div>
+        <div class="export-label">Trigger branches</div>
+        <input type="text" value="${cicdOptions.branches.join(', ')}" 
+          onchange="cicdOptions.branches=this.value.split(',').map(s=>s.trim()).filter(Boolean)"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-family:var(--mono);font-size:12px;color:var(--text-1);outline:none"/>
+        <div style="font-size:10px;color:var(--text-3);margin-top:4px">Comma-separated branch names</div>
+      </div>
+
+      <!-- Generate button -->
+      <button class="btn btn-green" onclick="generateAndShowCICD()" style="width:100%;justify-content:center">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M5 3l3 3-3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Generate CI/CD Configs
+      </button>
+
+      <!-- Results area -->
+      <div id="cicd-results" style="display:${cicdConfigs?'block':'none'}">
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="cicd-file-tabs">
+          ${['githubActions','jenkins','dockerCompose','makefileTargets'].map((k,i) => `
+            <div class="script-file-tab ${k===cicdFile?'active':''}" onclick="selectCICDFile('${k}',this)">
+              ${{ githubActions:'GitHub Actions', jenkins:'Jenkinsfile', dockerCompose:'Docker Compose', makefileTargets:'Makefile' }[k]}
+            </div>`).join('')}
+        </div>
+
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-filename" id="cicd-filename">${cicdConfigs?.[cicdFile]?.filename||''}</span>
+            <button class="copy-code-btn" onclick="copyCICDCode()">Copy</button>
+          </div>
+          <pre class="code-pre" id="cicd-code-pre" style="max-height:340px">${cicdConfigs ? escHtml(cicdConfigs[cicdFile]?.content||'') : ''}</pre>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleBrowser(val, checked) {
+  if (checked && !cicdOptions.browsers.includes(val)) cicdOptions.browsers.push(val);
+  else if (!checked) cicdOptions.browsers = cicdOptions.browsers.filter(b => b !== val);
+  if (!cicdOptions.browsers.length) cicdOptions.browsers = [val]; // keep at least one
+}
+
+function toggleReporter(val, checked) {
+  if (checked && !cicdOptions.reporters.includes(val)) cicdOptions.reporters.push(val);
+  else cicdOptions.reporters = cicdOptions.reporters.filter(r => r !== val);
+}
+
+function selectCICDFile(key, el) {
+  cicdFile = key;
+  document.querySelectorAll('#cicd-file-tabs .script-file-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (cicdConfigs?.[key]) {
+    document.getElementById('cicd-filename').textContent = cicdConfigs[key].filename;
+    document.getElementById('cicd-code-pre').textContent = cicdConfigs[key].content;
+  }
+}
+
+async function generateAndShowCICD() {
+  if (!currentProject) return;
+  const allTCs = (currentProject.pages||[]).flatMap(pg => pg.testCases||[]);
+
+  try {
+    const res = await fetch(`${API}/api/generate-cicd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        framework: selectedFramework,
+        projectName: currentProject.name || currentProject.url,
+        pageType: currentProject.pageType || 'page',
+        baseUrl: currentProject.url || 'https://staging.example.com',
+        testCaseCount: allTCs.length,
+        ...cicdOptions,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    cicdConfigs = data.configs;
+    cicdFile = 'githubActions';
+
+    // Re-render with results
+    const body = document.getElementById('drawer-body');
+    renderCICDTab(body);
+
+    showToast('CI/CD configs generated!', 'success');
+  } catch (err) {
+    showToast('CI/CD error: ' + err.message, 'error');
+  }
+}
+
+async function copyCICDCode() {
+  const pre = document.getElementById('cicd-code-pre');
+  if (!pre) return;
+  try {
+    await navigator.clipboard.writeText(pre.textContent);
+    const btn = document.querySelector('#cicd-results .copy-code-btn');
+    if (btn) { btn.textContent = 'Copied!'; btn.style.color = 'var(--green)'; setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 1500); }
+  } catch { showToast('Copy failed', 'error'); }
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeConfirm(); } });
+
+// ── Inject spin keyframe for regen button ─────────────────────────────
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+</script>
+</body>
+</html>

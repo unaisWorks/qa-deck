@@ -1,0 +1,20 @@
+{
+  "name": "qa-deck-backend",
+  "version": "1.0.0",
+  "description": "Local backend API and recorder for the QA Deck Chrome extension",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No automated tests configured yet.\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}

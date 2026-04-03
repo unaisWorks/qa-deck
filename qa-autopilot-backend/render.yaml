@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: qa-deck-backend
+    runtime: node
+    rootDir: qa-autopilot-backend
+    buildCommand: npm install && npx playwright install chromium
+    startCommand: node server.js
+    envVars:
+      - key: WEBSITE_ORIGIN
+        value: https://qadeck.com
+    plan: free

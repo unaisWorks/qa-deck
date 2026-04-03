@@ -1,0 +1,34 @@
+# IDE / AI tool configs — local only
+.claude/
+.cursor/
+**/.claude/
+**/.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# All node_modules
+**/node_modules/
+
+# Next.js build
+qadeck-website/.next/
+qadeck-website/out/
+
+# Secrets — never commit these
+qadeck-website/.env.local
+qadeck-website/.env.*.local
+qa-autopilot-backend/.env
+
+# Backend project data (user data, not source code)
+qa-autopilot-backend/projects/*.json
+
+# Chrome extension zip artifacts
+*.zip
+
+# Vercel
+qadeck-website/.vercel
+
+# TypeScript
+qadeck-website/*.tsbuildinfo
+qadeck-website/next-env.d.ts
