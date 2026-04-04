@@ -12,23 +12,23 @@ Thumbs.db
 **/node_modules/
 
 # Next.js build
-qadeck-website/.next/
-qadeck-website/out/
+.next/
+out/
 
 # Secrets — never commit these
-qadeck-website/.env.local
-qadeck-website/.env.*.local
-qa-autopilot-backend/.env
+website/.env.local
+website/.env.*.local
+backend/.env
 
 # Backend project data (user data, not source code)
-qa-autopilot-backend/projects/*.json
+backend/projects/*.json
 
 # Chrome extension zip artifacts
 *.zip
 
 # Vercel
-qadeck-website/.vercel
+website/.vercel
 
 # TypeScript
-qadeck-website/*.tsbuildinfo
-qadeck-website/next-env.d.ts
+website/*.tsbuildinfo
+website/next-env.d.ts
