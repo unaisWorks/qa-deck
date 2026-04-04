@@ -1,8 +1,7 @@
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   updateProfile,
@@ -58,17 +57,9 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signInWithGoogle() {
-  // Use redirect instead of popup to avoid COOP browser policy issues
-  await signInWithRedirect(requireAuth(), googleProvider);
-}
-
-export async function handleGoogleRedirect() {
-  const result = await getRedirectResult(requireAuth());
-  if (result?.user) {
-    await createUserDoc(result.user);
-    return result.user;
-  }
-  return null;
+  const result = await signInWithPopup(requireAuth(), googleProvider);
+  await createUserDoc(result.user);
+  return result.user;
 }
 
 export async function signOut() {

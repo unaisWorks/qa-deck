@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { signUpWithEmail, handleGoogleRedirect, getAuthErrorMessage } from "@/lib/auth";
+import { signUpWithEmail, getAuthErrorMessage } from "@/lib/auth";
 import GoogleSignInBtn from "@/components/GoogleSignInBtn";
 import { auth } from "@/lib/firebase";
 
@@ -21,18 +21,6 @@ export default function SignUpPage() {
     let cancelled = false;
 
     async function bootstrap() {
-      try {
-        const user = await handleGoogleRedirect();
-        if (!cancelled && user) {
-          router.replace("/dashboard/connect-extension");
-          return;
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getAuthErrorMessage(err, "google"));
-        }
-      }
-
       if (!auth) {
         if (!cancelled) {
           setError("Firebase is not configured. Add your keys to .env.local");
