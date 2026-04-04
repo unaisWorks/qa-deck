@@ -124,7 +124,7 @@
               </div>
               <div class="help-card-content">
                 <div class="help-card-title">Capture</div>
-                <div class="help-card-desc">Opens the local Capture tool at <code>localhost:3747/recorder</code>. Load a URL, start capture, interact with the page, then import the recorded flow into your project.</div>
+                <div class="help-card-desc">Local-only feature. Launches a Playwright browser on your machine to record interactions. Requires the backend running locally (<code>node server.js</code>). Not available on the cloud backend.</div>
               </div>
             </div>
 
@@ -932,9 +932,12 @@
             <circle cx="14" cy="14" r="6" fill="#E24B4A" opacity=".7"/>
           </svg>
         </div>
-        <p class="state-title">Backend not running</p>
-        <p class="state-sub">Start the backend to use the capture tool:<br>
-          <code style="font-size:10px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:3px;margin-top:4px;display:inline-block">node server.js</code>
+        <p class="state-title">Capture works locally only</p>
+        <p class="state-sub">This feature launches a real browser on your machine — it can't run on the cloud.<br><br>
+          To enable it, open Terminal and run:<br>
+          <code style="font-size:10px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:3px;margin-top:4px;display:inline-block">cd qa-deck/backend</code><br>
+          <code style="font-size:10px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:3px;margin-top:4px;display:inline-block">node server.js</code><br><br>
+          Then click "Check connection" below.
         </p>
         <button class="btn-primary" id="record-check-btn" style="margin-top:14px;width:100%">Check connection</button>
       </div>

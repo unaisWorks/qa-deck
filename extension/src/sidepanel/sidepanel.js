@@ -5328,7 +5328,7 @@ async function initRecordTab() {
     document.getElementById("net-capture-toggle")?.addEventListener("click", toggleNetworkCapture);
     document.getElementById("record-this-btn")?.addEventListener("click", recordThisPage);
     document.getElementById("record-open-dashboard")?.addEventListener("click", () => {
-      chrome.tabs.create({ url: `${BACKEND}/recorder.html` });
+      chrome.tabs.create({ url: "http://localhost:3747/recorder.html" });
     });
     document.getElementById("import-btn")?.addEventListener("click", importRecording);
   }
@@ -5343,7 +5343,7 @@ async function initRecordTab() {
 
 async function checkRecordBackend() {
   try {
-    const res = await fetchTimeout(`${BACKEND}/api/health`, 3000);
+    const res = await fetchTimeout("http://localhost:3747/api/health", 3000);
     if (!res.ok) throw new Error("not ok");
 
     show("record-ready");
@@ -5476,7 +5476,7 @@ async function recordThisPage() {
   }
 
   try {
-    const res = await fetch(`${BACKEND}/api/record/start`, {
+    const res = await fetch("http://localhost:3747/api/record/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ startUrl: url }),
@@ -5492,7 +5492,7 @@ async function recordThisPage() {
     if (importInput) importInput.value = data.sessionId;
 
     // Open capture tool in a new tab for monitoring
-    chrome.tabs.create({ url: `${BACKEND}/recorder.html` });
+    chrome.tabs.create({ url: "http://localhost:3747/recorder.html" });
   } catch (err) {
     showToast("Failed to start: " + err.message, "error");
   }
