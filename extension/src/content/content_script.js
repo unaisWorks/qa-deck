@@ -20,6 +20,7 @@ const BRIDGE_RESPONSE_TYPE = "QADECK_BRIDGE_RESPONSE";
 function isAllowedWebsiteOrigin(origin) {
   if (!origin) return false;
   if (origin === "https://qadeck.com" || origin === "https://www.qadeck.com") return true;
+  if (origin === "https://qa-deck-beryl.vercel.app") return true;
   try {
     const url = new URL(origin);
     return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");

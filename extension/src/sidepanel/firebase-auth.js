@@ -575,6 +575,7 @@
       return (
         url.origin === "https://qadeck.com" ||
         url.origin === "https://www.qadeck.com" ||
+        url.origin === "https://qa-deck-beryl.vercel.app" ||
         (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1"))
       );
     } catch {
