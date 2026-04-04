@@ -1,0 +1,9 @@
+node_modules/
+projects/
+.env
+render.yaml
+railway.json
+start.sh
+.claude/
+.cursor/
+*.log
