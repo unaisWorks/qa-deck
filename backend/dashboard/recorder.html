@@ -445,6 +445,10 @@ window.addEventListener('DOMContentLoaded', () => {
   updateProviderHint();
   initTestCaseWorkspace();
 
+  // Pre-fill URL from ?url= query param (passed by extension)
+  const presetUrl = new URLSearchParams(location.search).get('url');
+  if (presetUrl) document.getElementById('url-input').value = presetUrl;
+
   // Auto-detect provider when user pastes a key
   document.getElementById('settings-api-key').addEventListener('input', function() {
     const k = this.value.trim();

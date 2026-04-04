@@ -5328,7 +5328,11 @@ async function initRecordTab() {
     document.getElementById("net-capture-toggle")?.addEventListener("click", toggleNetworkCapture);
     document.getElementById("record-this-btn")?.addEventListener("click", recordThisPage);
     document.getElementById("record-open-dashboard")?.addEventListener("click", () => {
-      chrome.tabs.create({ url: "http://localhost:3747/recorder.html" });
+      const currentUrl = state.currentTabInfo?.url;
+      const target = currentUrl && !currentUrl.startsWith("chrome://")
+        ? `http://localhost:3747/recorder.html?url=${encodeURIComponent(currentUrl)}`
+        : "http://localhost:3747/recorder.html";
+      chrome.tabs.create({ url: target });
     });
     document.getElementById("import-btn")?.addEventListener("click", importRecording);
   }
