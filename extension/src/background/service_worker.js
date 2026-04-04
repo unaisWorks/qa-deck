@@ -1,6 +1,6 @@
 // PRODUCTION: replace with your Render URL before submitting to Chrome Web Store
 // e.g. "https://qa-deck-backend.onrender.com"
-const BACKEND_URL = "http://localhost:3747";
+const BACKEND_URL = "https://qa-deck-backend.onrender.com";
 const USER_STORAGE_KEY = "qaDeckUser";
 const PENDING_SESSION_STORAGE_KEY = "qaDeckPendingWebsiteSession";
 const PENDING_PROJECT_CONTEXT_STORAGE_KEY = "qaDeckPendingProjectContext";

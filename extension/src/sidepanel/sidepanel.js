@@ -5316,7 +5316,7 @@ function hide(id) { document.getElementById(id)?.classList.add("hidden"); }
 
 // PRODUCTION: replace with your Render URL before submitting to Chrome Web Store
 // e.g. "https://qa-deck-backend.onrender.com"
-const BACKEND = "http://localhost:3747";
+const BACKEND = "https://qa-deck-backend.onrender.com";
 let recordTabReady = false;
 
 async function initRecordTab() {
