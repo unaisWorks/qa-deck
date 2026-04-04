@@ -205,7 +205,7 @@ const server = http.createServer(async (req, res) => {
   const route = `${req.method} ${url.pathname}`;
 
   try {
-    if (route === "GET /api/health") return handleHealth(req, res);
+    if (route === "GET /api/health" || route === "HEAD /api/health") return handleHealth(req, res);
     if (route === "POST /api/generate-tests") return await handleGenerateTests(req, res);
     if (route === "POST /api/generate-script") return await handleGenerateScript(req, res);
     if (route === "POST /api/generate-journey-tests") return await handleGenerateJourneyTests(req, res);
