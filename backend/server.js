@@ -38,13 +38,6 @@ const ALLOWED_ORIGINS = [
 
 if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 
-// Guard: warn if running from unexpected location (e.g. stale process from renamed folder)
-const expectedDirName = "qa-autopilot-backend";
-if (path.basename(__dirname) !== expectedDirName) {
-  console.warn(`⚠️  WARNING: server.js is running from an unexpected directory: ${__dirname}`);
-  console.warn(`   Expected directory name: "${expectedDirName}"`);
-  console.warn(`   If you renamed the project folder, restart this server from the correct path.\n`);
-}
 
 // Sanitize AI JSON output — strips markdown fences and escapes literal control
 // characters that Claude sometimes emits inside string values (e.g. raw newlines

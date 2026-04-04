@@ -1,6 +1,6 @@
 {
   "name": "qa-deck-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local backend for the QA Deck Chrome extension — enables Capture and AI test generation",
   "main": "server.js",
   "bin": {
