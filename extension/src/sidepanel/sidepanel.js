@@ -1469,11 +1469,10 @@ async function handleSaveCurrentPage() {
     return;
   }
 
-  const suggested = buildSuggestedProjectContext({ preferActiveProject: false });
   const currentProject = state.activeProject;
   const mismatch = getLivePageMismatch();
 
-  if (currentProject && !mismatch && isActiveProjectForSuggestedPage(currentProject, suggested)) {
+  if (currentProject && !mismatch) {
     await persistCurrentProjectVersion("manual_save", { notify: true, requireProject: true });
     return;
   }
@@ -1487,6 +1486,7 @@ async function handleSaveCurrentPage() {
     if (decision !== "create") return;
   }
 
+  const suggested = buildSuggestedProjectContext({ preferActiveProject: false });
   const preferredProjectName = (currentProject?.appName || suggested.appName) && suggested.pageLabel
     ? `${currentProject?.appName || suggested.appName} · ${suggested.pageLabel}`
     : suggested.projectName;
