@@ -169,7 +169,7 @@ export default function ProjectsPage() {
             <p className="text-xs uppercase tracking-[0.28em] text-green/70 font-mono mb-3">Projects</p>
             <h1 className="text-3xl font-bold mb-2">Saved QA Deck projects</h1>
             <p className="text-white/45 text-sm max-w-2xl">
-              Revisit synced extension work, track version history, and manage project status without leaving your browser.
+              Each project represents one website or web app. Open a project to manage its saved pages, AI-generated test cases, scripts, runs, locators, and capture flow.
             </p>
             <div className="mt-4">
               <Link href="/dashboard/suites" className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border border-green/25 bg-green/10 text-green hover:bg-green/15 transition-colors">
@@ -197,6 +197,35 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+
+        <section className="mb-8 rounded-3xl border border-green/15 bg-[linear-gradient(135deg,rgba(29,158,117,0.10),rgba(255,255,255,0.02))] p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] lg:items-center">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">AI workflow</p>
+              <h2 className="text-xl font-semibold mb-2">AI helps generate & organize the heavy lifting</h2>
+              <p className="text-sm text-white/50 max-w-2xl leading-6">
+                Use QA Deck to scan a live page, generate test cases with AI, group them into packs, and turn them into runnable scripts. You stay in control of what gets approved and saved.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-3 lg:grid-cols-1 gap-3">
+              {[
+                ["1", "Scan & understand", "Capture the page structure, locators, and context from the live app."],
+                ["2", "Generate & review", "AI drafts test cases and scripts, then you refine and approve the result."],
+                ["3", "Save & reuse", "Keep pages grouped inside a project so packs, scripts, and runs stay organized."],
+              ].map(([step, title, body]) => (
+                <div key={step} className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-green/20 bg-green/10 text-[11px] font-semibold text-green">
+                      {step}
+                    </span>
+                    <div className="text-sm font-medium text-white">{title}</div>
+                  </div>
+                  <p className="text-xs text-white/45 leading-5">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <div className="bg-bg-card border border-border rounded-2xl p-4 mb-6">
           <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
@@ -262,9 +291,10 @@ export default function ProjectsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {grouped.map((group) => (
-              <div key={group.id} className="relative group bg-bg-card border border-border rounded-3xl hover:border-green/30 hover:bg-bg-elevated/70 transition-colors">
+          <div className="space-y-8">
+            <div className="grid gap-4 lg:grid-cols-2">
+              {grouped.map((group) => (
+                <div key={group.id} className="relative group bg-bg-card border border-border rounded-3xl hover:border-green/30 hover:bg-bg-elevated/70 transition-colors">
                 <Link
                   href={`/dashboard/projects/${group.primaryProjectId}`}
                   className="block p-5"
@@ -363,8 +393,74 @@ export default function ProjectsPage() {
                       <div className="text-xs text-white/30">No tags yet</div>
                     )}
                 </Link>
+                </div>
+              ))}
+            </div>
+
+            <section className="bg-bg-card border border-border rounded-3xl p-6">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+                <div className="rounded-3xl border border-green/15 bg-green/[0.05] p-5">
+                  <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">FAQ</p>
+                  <h2 className="text-2xl font-semibold mb-2">How QA Deck is organized</h2>
+                  <p className="text-sm text-white/45 leading-6">
+                    Use this as the working model while scanning, saving, and reviewing automation work.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {["Project = website or web app", "Page = saved page inside project", "Test Cases → Packs → Scripts"].map((item) => (
+                      <span key={item} className="text-xs px-3 py-1.5 rounded-full border border-green/15 bg-bg text-green/85">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    {
+                      question: "What is a project?",
+                      answer:
+                        "A project is the full website or web app you are testing. For example, Saucedemo is one project.",
+                    },
+                    {
+                      question: "What is a page?",
+                      answer:
+                        "A page is one saved page inside that project, such as Login, Inventory, Cart, or Checkout.",
+                    },
+                    {
+                      question: "What are Test Cases?",
+                      answer:
+                        "Test Cases are the canonical checks saved for the current page. Review them first, then build packs from them.",
+                    },
+                    {
+                      question: "What are Packs?",
+                      answer:
+                        "Packs are reusable selections such as Smoke, Regression, and E2E. They organize approved test cases for different run goals.",
+                    },
+                    {
+                      question: "What are Scripts?",
+                      answer:
+                        "Scripts are generated automation files created from the current page or from a selected pack.",
+                    },
+                    {
+                      question: "What is Capture?",
+                      answer:
+                        "Capture keeps QA Deck grounded in the live application. Use it to refresh page understanding or record real user flows before generating cases and scripts.",
+                    },
+                  ].map((item) => (
+                    <details key={item.question} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 group">
+                      <summary className="cursor-pointer list-none flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">{item.question}</div>
+                          <div className="text-xs text-white/30 mt-1">Open for details</div>
+                        </div>
+                        <span className="text-white/30 text-xs transition-transform group-open:rotate-90 mt-1">▶</span>
+                      </summary>
+                      <p className="text-sm text-white/55 mt-3 leading-6">{item.answer}</p>
+                    </details>
+                  ))}
+                </div>
               </div>
-            ))}
+            </section>
           </div>
         )}
       </main>

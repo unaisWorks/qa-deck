@@ -459,6 +459,13 @@ body {
   gap: 5px;
 }
 
+.project-action-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  padding: 0 2px;
+}
+
 .project-primary-row {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
@@ -508,6 +515,39 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+}
+
+.project-flow-note {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 12px;
+  border: 0.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.project-flow-label {
+  font-size: 8px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.38px;
+  font-family: var(--mono);
+}
+
+.project-flow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.project-flow-step {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 0.5px solid rgba(255,255,255,0.08);
+  background: var(--bg);
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────── */

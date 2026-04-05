@@ -461,9 +461,9 @@ async function maybeProcessPendingProjectContext(incomingContext = null) {
 
 function buildGateCopy(context = {}) {
   if (context.feature) {
-    return `${context.feature} needs a connected QA Deck account so the extension can save projects, versions, and dashboard history in one place.`;
+    return `${context.feature} needs a connected QA Deck account so the extension can save projects, versions, and AI-generated work in one place.`;
   }
-  return "Connect QA Deck on qadeck.com to sync projects, versions, and generated assets before using this feature.";
+  return "Connect QA Deck on qadeck.com to sync projects, versions, and AI-generated assets before using this feature.";
 }
 
 function openLoginRequiredModal(context = {}) {
@@ -668,17 +668,17 @@ function renderProjectWorkspace() {
   if (activeName) {
     activeName.textContent = connected
       ? (state.activeProject?.appName || state.activeProject?.name || "No active project")
-      : "Guest utility mode";
+      : "Guest mode";
   }
   if (currentProjectText) {
     currentProjectText.textContent = connected
       ? (selectedGroup?.name || state.activeProject?.appName || "Select project")
-      : "Guest utility mode";
+      : "Guest mode";
   }
   if (currentPageText) {
     currentPageText.textContent = connected
       ? (state.activeProject?.pageLabel || state.activeProject?.name || "Select page")
-      : "Locators only";
+      : "Locator tools";
   }
   if (activeMeta) activeMeta.textContent = buildActiveProjectMetaText();
   const livePageHint = buildLivePageHint();
@@ -900,11 +900,11 @@ function buildProjectOptionLabel(project) {
 
 function buildActiveProjectMetaText() {
   if (!isCloudSignedIn()) {
-    return "Connect QA Deck to save work and sync history.";
+    return "Connect QA Deck to save AI-generated work and sync history.";
   }
 
   if (!state.activeProject) {
-    return "Select a project and page to start tracked work.";
+    return "Select a project and page to start AI-assisted tracked work.";
   }
 
   const bits = [
@@ -1206,7 +1206,7 @@ async function createProjectFromModal() {
       status,
       tags,
       mode: getCurrentWorkspaceMode(),
-      sourceUrl: getCurrentWorkspaceUrl(),
+      sourceUrl: getLiveTabUrl() || getCurrentWorkspaceUrl(),
       appName,
       pageLabel,
     });
@@ -1306,8 +1306,9 @@ function detectKeywordPageLabel(textValue) {
 
 function buildSuggestedProjectContext(options = {}) {
   if (state.currentTab === "journey" || state.activeArtifactMode === "journey") {
+    const liveUrl = getLiveTabUrl() || getCurrentWorkspaceUrl();
     return {
-      appName: state.activeProject?.appName || inferDomainLabel(getCurrentWorkspaceUrl()),
+      appName: state.activeProject?.appName || inferDomainLabel(liveUrl),
       pageLabel: state.activeProject?.pageLabel || "",
       projectName: state.journey.name || "Untitled Journey",
     };
@@ -1322,8 +1323,8 @@ function buildSuggestedProjectContext(options = {}) {
     };
   }
 
-  const title = state.currentPageData?.meta?.title || "";
-  const url = getCurrentWorkspaceUrl();
+  const title = state.currentTabInfo?.title || state.currentPageData?.meta?.title || "";
+  const url = getLiveTabUrl() || getCurrentWorkspaceUrl();
   const pageType = state.currentPageData?.meta?.pageType || "";
   const appName = inferDomainLabel(url);
   const pageLabel =
@@ -1355,7 +1356,7 @@ function isActiveProjectForSuggestedPage(project, suggested) {
   if (appMatches && pageMatches) return true;
 
   try {
-    const suggestedUrl = new URL(getCurrentWorkspaceUrl() || "");
+    const suggestedUrl = new URL(getLiveTabUrl() || getCurrentWorkspaceUrl() || "");
     const activeUrl = new URL(project.sourceUrl || "");
     return appMatches && suggestedUrl.pathname === activeUrl.pathname;
   } catch {
@@ -1367,9 +1368,13 @@ function getCurrentWorkspaceMode() {
   return state.currentTab === "journey" || state.activeArtifactMode === "journey" ? "journey" : "page";
 }
 
+function getLiveTabUrl() {
+  return state.currentTabInfo?.url || "";
+}
+
 function getCurrentWorkspaceUrl() {
-  if (getCurrentWorkspaceMode() === "journey") return state.journey.steps?.[0]?.url || state.currentTabInfo?.url || "";
-  return state.currentPageData?.meta?.url || state.currentTabInfo?.url || "";
+  if (getCurrentWorkspaceMode() === "journey") return state.journey.steps?.[0]?.url || getLiveTabUrl();
+  return state.currentPageData?.meta?.url || getLiveTabUrl();
 }
 
 function normalizeUrlPath(value) {
@@ -1378,7 +1383,7 @@ function normalizeUrlPath(value) {
 
 function doesLoadedScanMatchActiveTab() {
   const loadedUrl = state.currentPageData?.meta?.url || "";
-  const activeUrl = state.currentTabInfo?.url || "";
+  const activeUrl = getLiveTabUrl();
   if (!loadedUrl || !activeUrl) return false;
 
   try {
@@ -1669,7 +1674,7 @@ function buildProjectVersionBundle(trigger) {
     mode,
     status: "draft",
     tags: [],
-    sourceUrl: getCurrentWorkspaceUrl(),
+    sourceUrl: getPreferredPersistedWorkspaceUrl(mode),
     activeFramework: state.selectedFramework,
     artifactCounts: emptyArtifactCounts(),
     createdAt: now,
@@ -1688,7 +1693,7 @@ function buildProjectVersionBundle(trigger) {
   const meta = {
     ...baseMeta,
     mode,
-    sourceUrl: getCurrentWorkspaceUrl() || baseMeta.sourceUrl || "",
+    sourceUrl: getPreferredPersistedWorkspaceUrl(mode) || baseMeta.sourceUrl || "",
     activeFramework: state.selectedFramework,
     artifactCounts,
     latestVersionId: versionId,
@@ -1740,6 +1745,20 @@ function buildCurrentArtifactSet(mode) {
     notes: isJourneyMode ? collectJourneyNotes(state.journey) : null,
     scriptFiles: flattenScriptsToFiles(state.scripts),
   };
+}
+
+function getPreferredPersistedWorkspaceUrl(mode = getCurrentWorkspaceMode()) {
+  if (mode === "journey") {
+    return state.journey.steps?.[0]?.url
+      || state.activeProjectRecord?.meta?.sourceUrl
+      || state.activeProject?.sourceUrl
+      || getLiveTabUrl();
+  }
+
+  return state.currentPageData?.meta?.url
+    || state.activeProjectRecord?.meta?.sourceUrl
+    || state.activeProject?.sourceUrl
+    || getLiveTabUrl();
 }
 
 function buildArtifactCountsFromArtifacts(mode, artifacts) {
@@ -3129,7 +3148,7 @@ async function generateTestCases() {
     return;
   }
 
-  setButtonLoading("generate-tc-btn", true, "Generating...", "Generate test cases →");
+  setButtonLoading("generate-tc-btn", true, "Generating...", "Generate AI test cases →");
   switchTab("testcases");
   show("tc-generating");
   hide("tc-empty");
@@ -3143,7 +3162,7 @@ async function generateTestCases() {
   });
 
   hide("tc-generating");
-  setButtonLoading("generate-tc-btn", false, "", "Generate test cases →");
+  setButtonLoading("generate-tc-btn", false, "", "Generate AI test cases →");
 
   if (!result?.success) {
     show("tc-empty");
@@ -3162,7 +3181,7 @@ async function generateTestCases() {
   updateTCBadge();
   syncScriptPackSelect();
   await persistCurrentProjectVersion("generate_tests", { notify: false });
-  showToast(`${state.testCases.length} test cases generated`, "success");
+  showToast(`${state.testCases.length} AI test cases generated`, "success");
 }
 
 // ─── TEST CASE RENDERING ──────────────────────────────────────────────────────
@@ -3449,7 +3468,7 @@ function updateGenerateScriptBtn() {
     btn.disabled = n === 0;
     return;
   }
-  btn.textContent = n > 0 ? `Generate ${packLabel} script (${n}) →` : `Approve ${packLabel} cases first`;
+  btn.textContent = n > 0 ? `Generate ${packLabel} scripts (${n}) →` : `Approve ${packLabel} test cases first`;
   btn.disabled = n === 0;
 }
 
