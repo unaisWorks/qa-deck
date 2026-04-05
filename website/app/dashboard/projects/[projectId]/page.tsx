@@ -306,6 +306,118 @@ function upsertRunResult(
   return updated;
 }
 
+function slugifyDownloadLabel(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function formatFrameworkLabel(framework: string) {
+  switch (framework) {
+    case "selenium-python":
+      return "Selenium Python";
+    case "playwright-python":
+      return "Playwright Python";
+    case "playwright-typescript":
+      return "Playwright TypeScript";
+    case "selenium-java":
+      return "Selenium Java";
+    case "webdriverio":
+      return "WebdriverIO";
+    default:
+      return framework || "QA Deck";
+  }
+}
+
+function getFrameworkInstallNotes(framework: string) {
+  switch (framework) {
+    case "selenium-python":
+      return ["pip install -r requirements.txt", "pytest -q"];
+    case "playwright-python":
+      return ["pip install -r requirements.txt", "playwright install chromium", "pytest -q"];
+    case "playwright-typescript":
+      return ["npm install", "npx playwright install chromium", "npx playwright test"];
+    case "selenium-java":
+      return ["mvn test"];
+    case "webdriverio":
+      return ["npm install", "npx wdio run wdio.conf.js"];
+    default:
+      return ["Follow the framework-specific setup included in this bundle."];
+  }
+}
+
+function buildBundleReadme(options: {
+  projectName: string;
+  sourceUrl: string;
+  framework: string;
+  packLabel: string;
+  fileCount: number;
+}) {
+  return [
+    `# ${options.projectName || "QA Deck"} run-ready bundle`,
+    "",
+    `Framework: ${formatFrameworkLabel(options.framework)}`,
+    `Pack: ${options.packLabel}`,
+    `Source URL: ${options.sourceUrl || "—"}`,
+    `Files included: ${options.fileCount}`,
+    "",
+    "## Quick start",
+    ...getFrameworkInstallNotes(options.framework).map((step) => `- ${step}`),
+    "",
+    "## What is included",
+    "- Generated script files from the currently approved test cases",
+    "- Support files needed to run the bundle locally",
+    "- This README",
+    "",
+    "## Notes",
+    "- If you regenerate scripts, download a fresh bundle so the ZIP stays in sync.",
+    "- If a framework-specific support file is already present, QA Deck keeps it and does not overwrite it.",
+  ].join("\n");
+}
+
+function buildFrameworkSupportFiles(framework: string) {
+  if (framework === "selenium-python") {
+    return [
+      {
+        filename: "requirements.txt",
+        content: "selenium\npytest\n",
+      },
+    ];
+  }
+
+  if (framework === "playwright-python") {
+    return [
+      {
+        filename: "requirements.txt",
+        content: "playwright\npytest\npytest-playwright\n",
+      },
+    ];
+  }
+
+  return [];
+}
+
+function buildDownloadFilename(projectName: string, packLabel: string) {
+  const base = slugifyDownloadLabel(projectName) || "qa-deck";
+  const pack = slugifyDownloadLabel(packLabel) || "bundle";
+  return `${base}-${pack}-ready-to-run.zip`;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const router = useRouter();
@@ -385,6 +497,8 @@ export default function ProjectDetailPage() {
   const [regenSaving, setRegenSaving] = useState(false);
   const [regenError, setRegenError] = useState("");
   const [selectedScriptPack, setSelectedScriptPack] = useState<"page" | WebsiteTestCasePack>("page");
+  const [bundleDownloadSaving, setBundleDownloadSaving] = useState(false);
+  const [bundleDownloadError, setBundleDownloadError] = useState("");
 
   // ── Page mismatch protection ──────────────────────────────────────────────
   const [showPageMismatchSaveModal, setShowPageMismatchSaveModal] = useState(false);
@@ -1144,6 +1258,78 @@ export default function ProjectDetailPage() {
       setRegenError(err instanceof Error ? err.message : "Regeneration failed");
     } finally {
       setRegenSaving(false);
+    }
+  }
+
+  async function handleDownloadReadyBundle() {
+    if (!bundle) return;
+    if (!bundle.artifacts.scriptFiles.length) {
+      setBundleDownloadError("Generate scripts first before downloading a bundle.");
+      return;
+    }
+
+    setBundleDownloadSaving(true);
+    setBundleDownloadError("");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const framework = bundle.meta.activeFramework || regenFramework || "selenium-python";
+      const packLabel = currentGeneratedPack === "page"
+        ? "Test Cases"
+        : TESTCASE_PACK_LABELS[currentGeneratedPack];
+      const seen = new Set<string>();
+
+      bundle.artifacts.scriptFiles.forEach((file) => {
+        const filename = file.filename.replace(/^\/+/, "").trim();
+        if (!filename || seen.has(filename)) return;
+        seen.add(filename);
+        const content = editedContents[file.id] ?? file.content;
+        zip.file(filename, content);
+      });
+
+      buildFrameworkSupportFiles(framework).forEach((supportFile) => {
+        const filename = supportFile.filename.replace(/^\/+/, "").trim();
+        if (!filename || seen.has(filename)) return;
+        seen.add(filename);
+        zip.file(filename, supportFile.content);
+      });
+
+      zip.file(
+        "README.md",
+        buildBundleReadme({
+          projectName: bundle.meta.name || "QA Deck",
+          sourceUrl: bundle.meta.sourceUrl || "",
+          framework,
+          packLabel,
+          fileCount: bundle.artifacts.scriptFiles.length,
+        })
+      );
+
+      zip.file(
+        "bundle-summary.json",
+        JSON.stringify({
+          projectId: bundle.meta.id,
+          projectName: bundle.meta.name,
+          sourceUrl: bundle.meta.sourceUrl,
+          framework,
+          selectedPack: packLabel,
+          generatedPack: currentGeneratedPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[currentGeneratedPack],
+          updatedAt: new Date().toISOString(),
+          fileCount: bundle.artifacts.scriptFiles.length,
+          files: bundle.artifacts.scriptFiles.map((file) => ({
+            filename: file.filename,
+            group: file.group || "page",
+            stepId: file.stepId || null,
+          })),
+        }, null, 2)
+      );
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      downloadBlob(blob, buildDownloadFilename(bundle.meta.name || "QA Deck", packLabel));
+    } catch (err) {
+      setBundleDownloadError(err instanceof Error ? err.message : "Failed to build download bundle");
+    } finally {
+      setBundleDownloadSaving(false);
     }
   }
 
@@ -2269,6 +2455,15 @@ export default function ProjectDetailPage() {
                         ))}
                       </div>
                       <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/50">{bundle.artifacts.scriptFiles.length} files</span>
+                      {bundle.artifacts.scriptFiles.length > 0 && (
+                        <button
+                          onClick={handleDownloadReadyBundle}
+                          disabled={bundleDownloadSaving}
+                          className="text-xs px-3 py-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center gap-1 disabled:opacity-60"
+                        >
+                          {bundleDownloadSaving ? "Preparing ZIP…" : "Download bundle"}
+                        </button>
+                      )}
                       <button
                         onClick={() => setShowRegenModal(true)}
                         className="text-xs px-3 py-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1"
@@ -2290,6 +2485,11 @@ export default function ProjectDetailPage() {
                       )}
                     </div>
                   </div>
+                  {bundleDownloadError && (
+                    <div className="mb-4 rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-xs text-red-200">
+                      {bundleDownloadError}
+                    </div>
+                  )}
                   <div className="mb-4 text-xs text-white/40">
                     Selected pack: <span className="text-white/75">{selectedScriptPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[selectedScriptPack]}</span>
                     {bundle.artifacts.scriptFiles.length > 0 && (
