@@ -228,15 +228,15 @@ export default function SuitesPage() {
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-8">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-green/70 font-mono mb-3">Project suites</p>
-            <h1 className="text-3xl font-bold mb-2">Complete project suite</h1>
+            <h1 className="text-3xl font-bold mb-2">Project packs & coverage</h1>
             <p className="text-white/45 text-sm max-w-2xl">
-              Combine saved pages and captured flows into one project-level suite view so Smoke, Page, Regression, and E2E packs stay organized without turning QA into a spreadsheet exercise.
+              Review how saved pages and AI-generated test cases contribute to project-level packs. This view helps you understand page coverage, Smoke and Regression packs, and any flow-based E2E coverage.
             </p>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto">
             <div className="bg-bg-card border border-border rounded-2xl px-4 py-3">
-              <div className="text-xs text-white/40">Workspaces</div>
+              <div className="text-xs text-white/40">Projects</div>
               <div className="text-2xl font-semibold mt-1">{mergedProjectGroups.length}</div>
             </div>
             <div className="bg-bg-card border border-border rounded-2xl px-4 py-3">
@@ -254,13 +254,37 @@ export default function SuitesPage() {
           </div>
         </div>
 
+        <section className="mb-8 rounded-3xl border border-green/15 bg-[linear-gradient(135deg,rgba(29,158,117,0.10),rgba(255,255,255,0.02))] p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] lg:items-center">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">AI workflow</p>
+              <h2 className="text-xl font-semibold mb-2">AI-generated coverage still needs a clear review surface</h2>
+              <p className="text-sm text-white/50 max-w-2xl leading-6">
+                This page turns saved work into something easier to reason about. Instead of hunting through pages one by one, you can see where AI-generated coverage is already strong and where a project still needs gaps filled.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-3 lg:grid-cols-1 gap-3">
+              {[
+                ["Coverage", "Which pages have approved test cases already."],
+                ["Packs", "How approved cases are distributed into Smoke, Regression, and E2E."],
+                ["Gaps", "Which pages still need better saved coverage before scripts and runs feel reliable."],
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                  <div className="text-sm font-medium text-white mb-1">{title}</div>
+                  <p className="text-xs text-white/45 leading-5">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {unassignedProjects.length > 0 ? (
           <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/8 px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-amber-300">Some projects are not assigned to an app suite yet</div>
+                <div className="text-sm font-semibold text-amber-300">Some saved pages are not grouped into a project yet</div>
                 <p className="text-xs text-amber-200/65 mt-1">
-                  Add a project name in project settings so QA Deck can organize the full suite for that website or web app automatically.
+                  Add the same parent project name in page settings so QA Deck can group those pages under one website or web app automatically.
                 </p>
               </div>
               <span className="text-xs px-2.5 py-1 rounded-full border border-amber-500/25 text-amber-200">{unassignedProjects.length} unassigned</span>
@@ -283,7 +307,7 @@ export default function SuitesPage() {
             </div>
             <h2 className="text-xl font-semibold mb-2">No project suites yet</h2>
             <p className="text-white/45 text-sm max-w-xl mx-auto">
-              Open any project, add a shared project name in project settings, and QA Deck will roll those page and journey assets into one suite view here.
+              Open any project, add a shared parent project name to its pages, and QA Deck will group those saved pages into one project-level coverage view here.
             </p>
           </div>
         ) : (
@@ -299,11 +323,11 @@ export default function SuitesPage() {
                       </span>
                     </div>
                     <p className="text-sm text-white/45">
-                      Updated {formatDate(summary.projectGroup.updatedAt)} · {summary.approvedCases.length} approved cases available for the full project suite
+                      Updated {formatDate(summary.projectGroup.updatedAt)} · {summary.approvedCases.length} approved test cases available across this project
                     </p>
                   </div>
                   <Link href="/dashboard/projects" className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-white/55 hover:text-white hover:border-white/20 transition-colors">
-                    Manage linked projects
+                    Manage project pages
                   </Link>
                 </div>
 
@@ -339,7 +363,7 @@ export default function SuitesPage() {
                     <div className="flex items-center justify-between gap-3 mb-4">
                       <div>
                         <h3 className="text-lg font-semibold">Page coverage</h3>
-                        <p className="text-xs text-white/40 mt-1">Which pages are covered by page-level cases right now.</p>
+                        <p className="text-xs text-white/40 mt-1">Which saved pages are covered by approved page-level test cases right now.</p>
                       </div>
                       <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/50">
                         {summary.pageCoverage.length} covered
@@ -352,14 +376,14 @@ export default function SuitesPage() {
                           <div key={page.key} className="rounded-2xl border border-white/8 bg-white/3 px-4 py-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <div className="font-medium truncate">{page.label}</div>
-                              <div className="text-xs text-white/35 mt-1">Page suite coverage</div>
+                              <div className="text-xs text-white/35 mt-1">Page-level coverage</div>
                             </div>
                             <span className="text-sm font-semibold">{page.count}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-white/35">No page-level cases have been approved in this project yet.</div>
+                        <div className="text-sm text-white/35">No approved page-level test cases have been saved in this project yet.</div>
                     )}
 
                     {summary.missingPages.length ? (
@@ -380,8 +404,8 @@ export default function SuitesPage() {
                     <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
                       <div className="flex items-center justify-between gap-3 mb-4">
                         <div>
-                          <h3 className="text-lg font-semibold">E2E flow coverage</h3>
-                          <p className="text-xs text-white/40 mt-1">Flows grouped from journey or end-to-end cases.</p>
+                          <h3 className="text-lg font-semibold">Flow coverage</h3>
+                          <p className="text-xs text-white/40 mt-1">Cross-page flows grouped from approved E2E cases.</p>
                         </div>
                         <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/50">
                           {summary.flowCoverage.length} flows
@@ -393,20 +417,20 @@ export default function SuitesPage() {
                           {summary.flowCoverage.map((flow) => (
                             <div key={flow.key} className="rounded-2xl border border-white/8 bg-white/3 px-4 py-3 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="font-medium truncate">{flow.label}</div>
-                                <div className="text-xs text-white/35 mt-1">Journey or flow validation</div>
+                              <div className="font-medium truncate">{flow.label}</div>
+                                <div className="text-xs text-white/35 mt-1">Cross-page validation</div>
                               </div>
                               <span className="text-sm font-semibold">{flow.count}</span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-white/35">No E2E flows are approved in this project yet.</div>
+                        <div className="text-sm text-white/35">No approved E2E flows are saved in this project yet.</div>
                       )}
                     </div>
 
                     <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
-                      <h3 className="text-lg font-semibold mb-4">Linked projects</h3>
+                      <h3 className="text-lg font-semibold mb-4">Linked pages</h3>
                       <div className="space-y-3">
                         {summary.bundles.map((bundle) => (
                           <Link
@@ -421,7 +445,7 @@ export default function SuitesPage() {
                               </div>
                               <div className="text-right shrink-0">
                                 <div className="text-sm font-semibold">{bundle.meta.artifactCounts.testCases}</div>
-                                <div className="text-[11px] text-white/35">cases</div>
+                                <div className="text-[11px] text-white/35">test cases</div>
                               </div>
                             </div>
                           </Link>
@@ -434,6 +458,66 @@ export default function SuitesPage() {
             ))}
           </div>
         )}
+
+        <section className="mt-8 bg-bg-card border border-border rounded-3xl p-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+            <div className="rounded-3xl border border-green/15 bg-green/[0.05] p-5">
+              <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">FAQ</p>
+              <h2 className="text-2xl font-semibold mb-2">How to read this page</h2>
+              <p className="text-sm text-white/45 leading-6">
+                This page answers two questions across a project: what is already covered, and what still needs work.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {["Page coverage", "Smoke & Regression packs", "Flow-based E2E coverage"].map((item) => (
+                  <span key={item} className="text-xs px-3 py-1.5 rounded-full border border-green/15 bg-bg text-green/85">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {[
+                {
+                  question: "What is a project on this page?",
+                  answer:
+                    "A project is the full website or web app. QA Deck groups saved pages under that shared project name.",
+                },
+                {
+                  question: "What is page coverage?",
+                  answer:
+                    "Page coverage shows which saved pages already have approved page-level test cases.",
+                },
+                {
+                  question: "What are Smoke and Regression here?",
+                  answer:
+                    "They are packs built from approved test cases. Smoke focuses on critical checks, while Regression covers broader retesting.",
+                },
+                {
+                  question: "What is flow coverage?",
+                  answer:
+                    "Flow coverage shows cross-page E2E validations that were saved from approved flow-based cases.",
+                },
+                {
+                  question: "Why do I see linked pages?",
+                  answer:
+                    "Linked pages are the individual saved pages that currently belong to the same parent project.",
+                },
+              ].map((item) => (
+                <details key={item.question} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 group">
+                  <summary className="cursor-pointer list-none flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-white">{item.question}</div>
+                      <div className="text-xs text-white/30 mt-1">Open for details</div>
+                    </div>
+                    <span className="text-white/30 text-xs transition-transform group-open:rotate-90 mt-1">▶</span>
+                  </summary>
+                  <p className="text-sm text-white/55 mt-3 leading-6">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

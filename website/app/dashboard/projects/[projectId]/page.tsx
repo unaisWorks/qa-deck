@@ -1439,6 +1439,30 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
+              <div className="mt-5 rounded-3xl border border-green/15 bg-[linear-gradient(135deg,rgba(29,158,117,0.10),rgba(255,255,255,0.02))] p-5">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] lg:items-center">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">AI workflow</p>
+                    <h2 className="text-xl font-semibold mb-2">AI drafts the work here. You review, save, and run it.</h2>
+                    <p className="text-sm text-white/50 max-w-2xl leading-6">
+                      This page keeps one saved page inside the project grounded in the live app. Use it to review AI-generated test cases, organize packs, generate scripts, and decide what should be saved or rerun.
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-3 lg:grid-cols-1 gap-3">
+                    {[
+                      ["Test Cases", "Review and refine the AI-generated checks for this saved page."],
+                      ["Scripts", "Turn approved work into automation files for the framework you need."],
+                      ["Runs", "Execute the generated bundle and save results when the output is worth keeping."],
+                    ].map(([title, body]) => (
+                      <div key={title} className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
+                        <div className="text-sm font-medium text-white mb-1">{title}</div>
+                        <p className="text-xs text-white/45 leading-5">{body}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {siblingPages.length > 0 && (
                 <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                   <div className="flex items-center justify-between gap-3 mb-3">
@@ -1487,6 +1511,14 @@ export default function ProjectDetailPage() {
                 <div className="rounded-xl bg-white/4 border border-white/8 px-4 py-2.5 flex gap-3 items-center">
                   <span className="text-xs text-white/40">Updated</span>
                   <span className="font-semibold">{formatDateTime(bundle.meta.updatedAt)}</span>
+                </div>
+                <div className="rounded-xl bg-white/4 border border-white/8 px-4 py-2.5 flex gap-3 items-center">
+                  <span className="text-xs text-white/40">AI status</span>
+                  <span className="font-semibold">
+                    {localTestcases.length > 0 || bundle.artifacts.scriptFiles.length > 0
+                      ? "Generated content available"
+                      : "Ready to generate"}
+                  </span>
                 </div>
               </div>
 
@@ -2428,37 +2460,6 @@ export default function ProjectDetailPage() {
                   </div>
                 )}
 
-                <div className="bg-bg-card border border-border rounded-3xl p-6">
-                  <h2 className="text-xl font-semibold mb-4">CI/CD files</h2>
-                  {!cicdEntries.length ? (
-                    <div className="text-sm text-white/35">No CI/CD files saved yet.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {cicdEntries.map(([key, file]) => (
-                        <details key={key} className="group rounded-2xl border border-white/8 bg-white/3">
-                          <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none list-none">
-                            <div>
-                              <div className="text-sm font-medium">{file.filename}</div>
-                              <div className="text-xs text-white/35 mt-0.5">{key}</div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                onClick={e => { e.preventDefault(); navigator.clipboard?.writeText((file as { filename: string; content?: string }).content || "").catch(() => {}); }}
-                                className="text-[11px] px-2.5 py-1 rounded-lg border border-white/15 text-white/50 hover:text-white transition-colors"
-                              >
-                                Copy
-                              </button>
-                              <span className="text-white/30 text-xs group-open:rotate-90 transition-transform inline-block">▶</span>
-                            </div>
-                          </summary>
-                          <pre className="px-4 pb-4 text-[11px] font-mono text-white/70 overflow-x-auto whitespace-pre leading-relaxed border-t border-white/5 pt-3">
-                            {(file as { filename: string; content?: string }).content || "No content saved."}
-                          </pre>
-                        </details>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
@@ -2648,7 +2649,7 @@ export default function ProjectDetailPage() {
                         {extState.connected ? `Connected${extState.email ? ` · ${extState.email}` : ""}` : "Extension not connected"}
                       </span>
                       <span className={`text-xs px-3 py-1.5 rounded-full border ${bundle.meta.mode === "journey" ? "bg-purple-500/10 text-purple-300 border-purple-500/20" : "bg-white/5 text-white/60 border-white/10"}`}>
-                        {bundle.meta.mode === "journey" ? "Journey project" : "Page project"}
+                        {bundle.meta.mode === "journey" ? "Flow capture" : "Page capture"}
                       </span>
                     </div>
                   </div>
@@ -2660,7 +2661,7 @@ export default function ProjectDetailPage() {
                         {[
                           "Open the target page with this project already selected in QA Deck.",
                           bundle.meta.mode === "journey"
-                            ? "Record the user flow you care about so E2E cases and packs stay grounded in real steps."
+                            ? "Record the user flow you care about so E2E test cases and scripts stay grounded in real steps."
                             : "Re-scan or capture the page to refresh locators and page understanding from the live app.",
                           "Return to Test Cases, Packs, Scripts, and Runs when you are ready to review or execute.",
                         ].map((step, index) => (
