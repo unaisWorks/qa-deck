@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QA Deck</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Header ──────────────────────────────────────────────────── -->
+    <header class="header">
+      <div class="logo">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="1" y="1" width="16" height="16" rx="4" fill="#1D9E75"/>
+          <path d="M5 9h8M5 6h5M5 12h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>QA <strong>Deck</strong></span>
+      </div>
+      <div class="header-right">
+        <div class="backend-status">
+          <span id="backend-dot" style="width:7px;height:7px;border-radius:50%;background:#ccc;display:inline-block;margin-right:4px"></span>
+          <span id="backend-label" style="font-size:10px;color:var(--text-muted)">Checking...</span>
+        </div>
+        <button class="icon-btn" id="theme-btn" title="Toggle dark/light theme">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v1M6.5 11v1M1 6.5H0M13 6.5h-1M2.5 2.5l.7.7M9.8 9.8l.7.7M2.5 10.5l.7-.7M9.8 3.2l.7-.7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+        <button class="icon-btn" id="bug-btn" title="Generate Bug Report" style="color:#E24B4A">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M7 4.5v3M7 9.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="help-btn" title="Help / Feature guide">?</button>
+        <button class="icon-btn" id="settings-btn" title="Settings">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <circle cx="7.5" cy="7.5" r="2" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M7.5 1v1.5M7.5 12.5V14M14 7.5h-1.5M2.5 7.5H1M12.2 2.8l-1.1 1.1M3.9 11.1l-1.1 1.1M12.2 12.2l-1.1-1.1M3.9 3.9L2.8 2.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Help / Walkthrough overlay ──────────────────────────────── -->
+    <div id="help-overlay" class="help-overlay hidden">
+      <div class="help-modal">
+        <div class="help-header">
+          <span class="help-title">Feature Guide</span>
+          <button class="help-close" id="help-close">✕</button>
+        </div>
+        <div class="help-body">
+          <p class="help-intro">QA Deck lives in the <strong>Chrome extension side panel</strong> — click the extension icon in the browser toolbar to open it. Use the tabs below to navigate features.</p>
+          <div class="help-cards">
+
+            <div class="help-card">
+              <div class="help-card-icon" style="background:#E1F5EE;color:#1D9E75">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3.5V2a1 1 0 011-1h1.5M10.5 1H12a1 1 0 011 1v1.5M13 10.5V12a1 1 0 01-1 1h-1.5M3.5 13H2a1 1 0 01-1-1v-1.5M5 7h4M7 5v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Scan</div>
+                <div class="help-card-desc">Extracts all interactive elements from the current page (forms, buttons, inputs). Required first step before generating tests.</div>
+              </div>
+            </div>
+
+            <div class="help-card">
+              <div class="help-card-icon" style="background:#EFF6FF;color:#2563EB">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h10M2 5h7M2 8h8M2 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Test Cases</div>
+                <div class="help-card-desc">AI-generated test cases from the scanned page. Edit, filter, approve, or add manual cases before generating scripts or packs.</div>
+              </div>
+            </div>
+
+            <div class="help-card help-card-highlight hidden">
+              <div class="help-card-icon" style="background:#ECFDF5;color:#0F766E">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <circle cx="2.2" cy="2.2" r="1.2" fill="currentColor"/>
+                  <circle cx="11.8" cy="7" r="1.2" fill="currentColor"/>
+                  <circle cx="2.2" cy="11.8" r="1.2" fill="currentColor"/>
+                  <path d="M3.4 2.9l7 3.2M3.4 11.1l7-3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Journey <span class="help-new-badge">NEW</span></div>
+                <div class="help-card-desc">Build a multi-page flow by adding scanned pages or importing a capture session. QA Deck groups journey-level and step-level coverage so you can generate end-to-end suites with clear transition gaps.</div>
+              </div>
+            </div>
+
+            <div class="help-card">
+              <div class="help-card-icon" style="background:#F5F0FF;color:#7C3AED">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 3l-3 4 3 4M10 3l3 4-3 4M7 1l-2 12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Scripts</div>
+                <div class="help-card-desc">Generates ready-to-run automation code in Selenium Python/Java and Playwright Python/TypeScript from approved test cases.</div>
+              </div>
+            </div>
+
+            <div class="help-card hidden">
+              <div class="help-card-icon" style="background:#FFF7ED;color:#C2410C">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="3" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 6h6M4 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">CI/CD</div>
+                <div class="help-card-desc">Generates GitHub Actions or Jenkins pipeline configs to run your generated tests automatically in CI.</div>
+              </div>
+            </div>
+
+            <div class="help-card help-card-highlight">
+              <div class="help-card-icon" style="background:#E1F5EE;color:#1D9E75">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M10 10l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Locators <span class="help-new-badge">NEW</span></div>
+                <div class="help-card-desc">Click <strong>Start Inspecting</strong>, then click any element on the page to instantly see Playwright and Selenium locators. Test any locator with the built-in verifier.</div>
+              </div>
+            </div>
+
+            <div class="help-card">
+              <div class="help-card-icon" style="background:#FEF2F2;color:#DC2626">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.2" opacity=".4"/><circle cx="7" cy="7" r="3" fill="currentColor"/></svg>
+              </div>
+              <div class="help-card-content">
+                <div class="help-card-title">Capture</div>
+                <div class="help-card-desc">Local-only feature. Launches a Playwright browser on your machine to record interactions. Requires the backend running locally (<code>node server.js</code>). Not available on the cloud backend.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="help-footer">
+          <button class="help-got-it" id="help-got-it">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Dataset Editor Modal ─────────────────────────────────────── -->
+    <div id="dataset-modal" class="bug-modal hidden">
+      <div class="bug-modal-card">
+        <div class="bug-modal-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="3" rx="1" stroke="#1D9E75" stroke-width="1.2"/><rect x="1" y="6" width="12" height="3" rx="1" stroke="#1D9E75" stroke-width="1.2" opacity=".7"/><rect x="1" y="11" width="12" height="2" rx="1" stroke="#1D9E75" stroke-width="1.2" opacity=".4"/></svg>
+            <span class="bug-modal-title">Test Datasets</span>
+            <span id="dataset-tc-title" style="font-size:10px;color:var(--text-muted);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          </div>
+          <button class="icon-btn" id="dataset-modal-close">✕</button>
+        </div>
+        <div class="bug-modal-body">
+          <p style="font-size:11px;color:var(--text-muted);line-height:1.6">Each row becomes a parametrized test run. Column headers are test data keys.</p>
+          <div id="dataset-columns-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+            <span style="font-size:9px;color:var(--text-muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.4px">Keys (headers)</span>
+            <button id="dataset-add-col-btn" class="btn-secondary" style="font-size:9px;padding:2px 7px">+ Key</button>
+          </div>
+          <div id="dataset-table-wrap" style="overflow-x:auto">
+            <table id="dataset-table" style="width:100%;border-collapse:collapse;font-size:11px"></table>
+          </div>
+          <button id="dataset-add-row-btn" class="btn-secondary" style="width:100%;font-size:10px;margin-top:6px">+ Add Dataset Row</button>
+        </div>
+        <div class="bug-modal-foot">
+          <button class="btn-secondary" id="dataset-cancel-btn" style="flex:1">Cancel</button>
+          <button class="btn-primary" id="dataset-save-btn" style="flex:1">Save Datasets</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Multi-Environment Modal ─────────────────────────────────── -->
+    <div id="env-modal" class="bug-modal hidden">
+      <div class="bug-modal-card">
+        <div class="bug-modal-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#1D9E75" stroke-width="1.3"/><path d="M4 7h6M7 4v6" stroke="#1D9E75" stroke-width="1.3" stroke-linecap="round"/></svg>
+            <span class="bug-modal-title">Environment Config</span>
+          </div>
+          <button class="icon-btn" id="env-modal-close">✕</button>
+        </div>
+        <div class="bug-modal-body">
+          <p style="font-size:11px;color:var(--text-muted);line-height:1.6">Define environments to generate separate config files. Tests read <code style="font-size:10px;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px">ENV</code> at runtime.</p>
+          <div id="env-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          <button class="btn-secondary" id="env-add-btn" style="width:100%;font-size:11px;margin-top:4px">+ Add Environment</button>
+        </div>
+        <div class="bug-modal-foot">
+          <button class="btn-secondary" id="env-cancel-btn" style="flex:1">Cancel</button>
+          <button class="btn-primary" id="env-save-btn" style="flex:1">Save Environments</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bug Report Modal ─────────────────────────────────────────── -->
+    <div id="bug-modal" class="bug-modal hidden">
+      <div class="bug-modal-card">
+        <div class="bug-modal-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#E24B4A" stroke-width="1.3"/><path d="M8 5v4M8 11v.5" stroke="#E24B4A" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="bug-modal-title">Bug Report</span>
+          </div>
+          <button class="icon-btn" id="bug-modal-close">✕</button>
+        </div>
+
+        <div class="bug-modal-body">
+          <div class="bug-field-row">
+            <div class="bug-field" style="flex:1">
+              <label class="bug-label">Title</label>
+              <input id="bug-title" class="bug-input" placeholder="Short description of the bug..."/>
+            </div>
+            <div class="bug-field" style="flex:0 0 110px">
+              <label class="bug-label">Severity</label>
+              <select id="bug-severity" class="bug-select">
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bug-field">
+            <label class="bug-label">URL &amp; Environment</label>
+            <input id="bug-url" class="bug-input" placeholder="https://..."/>
+          </div>
+
+          <div class="bug-field">
+            <label class="bug-label">Steps to Reproduce</label>
+            <textarea id="bug-steps" class="bug-textarea" rows="4" placeholder="1. Navigate to...&#10;2. Click...&#10;3. Observe..."></textarea>
+          </div>
+
+          <div class="bug-field-row">
+            <div class="bug-field" style="flex:1">
+              <label class="bug-label">Expected Result</label>
+              <textarea id="bug-expected" class="bug-textarea" rows="2" placeholder="What should happen..."></textarea>
+            </div>
+            <div class="bug-field" style="flex:1">
+              <label class="bug-label">Actual Result</label>
+              <textarea id="bug-actual" class="bug-textarea" rows="2" placeholder="What actually happened..."></textarea>
+            </div>
+          </div>
+
+          <div id="bug-screenshot-row" class="bug-screenshot-row hidden">
+            <div class="bug-label">Screenshot captured</div>
+            <img id="bug-screenshot-preview" class="bug-screenshot-preview" alt="Screenshot"/>
+          </div>
+
+          <div class="bug-meta" id="bug-meta"></div>
+        </div>
+
+        <div class="bug-modal-foot">
+          <button class="btn-secondary" id="bug-copy-md" style="flex:1">Copy Markdown</button>
+          <button class="btn-secondary" id="bug-copy-jira" style="flex:1">Copy Jira JSON</button>
+          <button class="btn-primary" id="bug-download-md">Download .md</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Settings panel (hidden by default) ──────────────────────── -->
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="settings-title">Settings</div>
+      <div class="form-group">
+        <label>AI Provider API Key</label>
+        <input type="password" id="api-key-input" placeholder="sk-ant-... / sk-... / AIza... / xai-... / gsk_... / LA-..." />
+        <div class="hint">Supports Claude (sk-ant-), OpenAI (sk-), Gemini (AIza), Grok (xai-), Llama/Groq (gsk_), Llama/Meta (LA-). Stored locally only.</div>
+        <div class="hint" id="provider-hint" style="margin-top:4px;font-weight:600;"></div>
+      </div>
+      <div class="form-group">
+        <label>Default framework</label>
+        <select id="default-framework">
+          <option value="selenium-python">Selenium Python</option>
+          <option value="selenium-java">Selenium Java</option>
+          <option value="playwright-python">Playwright Python</option>
+          <option value="playwright-typescript">Playwright TypeScript</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="save-settings-btn">Save settings</button>
+      <button class="btn-secondary" id="reload-ext-btn" style="width:100%;margin-top:6px;">↺ Reload Extension</button>
+    </div>
+
+    <!-- ── Current page info bar ───────────────────────────────────── -->
+    <div class="page-bar" id="page-bar">
+      <div class="page-url" id="page-url">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+          <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1"/>
+          <path d="M5.5 1c-1.4 1.8-1.4 7.2 0 9M5.5 1c1.4 1.8 1.4 7.2 0 9M1 5.5h9" stroke="currentColor" stroke-width="1"/>
+        </svg>
+        <span id="url-text">Loading...</span>
+      </div>
+      <span class="badge" id="element-badge">—</span>
+    </div>
+
+    <div class="project-bar">
+      <div class="project-bar-head">
+        <div class="project-bar-copy">
+          <div class="project-bar-label">Project</div>
+          <div class="project-bar-title" id="project-active-name">No active project</div>
+          <div class="project-bar-meta" id="project-active-meta">Connect QA Deck to save AI-generated work, sync history, and manage projects in the dashboard.</div>
+        </div>
+        <div class="project-bar-head-actions">
+          <span class="project-sync-pill guest" id="project-sync-pill">guest mode</span>
+          <button class="project-collapse-btn" id="project-collapse-btn" type="button" aria-expanded="true">Setup</button>
+        </div>
+      </div>
+
+      <div class="project-context-strip" id="project-context-strip">
+        <div class="project-context-chip">
+          <span class="project-context-label">Project</span>
+          <span class="project-context-value" id="project-current-project">No active project</span>
+        </div>
+        <div class="project-context-chip">
+          <span class="project-context-label">Page</span>
+          <span class="project-context-value" id="project-current-page">No page selected</span>
+        </div>
+      </div>
+
+      <div class="project-page-hint hidden" id="project-page-hint">
+        <div class="project-page-hint-copy" id="project-page-hint-copy">
+          This tab may be a different page than the one currently selected.
+        </div>
+        <button class="btn-secondary project-page-hint-btn" id="project-page-hint-btn" type="button">Save as this page</button>
+      </div>
+
+      <div class="project-bar-body" id="project-bar-body">
+        <div id="project-connected-controls" class="hidden">
+          <div class="project-primary-row">
+            <select id="project-picker-select" class="mini-select project-picker-select">
+              <option value="">Select project</option>
+            </select>
+            <select id="project-page-select" class="mini-select project-picker-select">
+              <option value="">Select page</option>
+            </select>
+          </div>
+
+          <div class="project-action-row">
+            <button class="btn-secondary" id="project-create-btn">Create page</button>
+            <button class="btn-primary" id="project-save-btn">Save current work</button>
+          </div>
+
+          <div class="project-action-hint">
+            Save current work after scanning, generating test cases, or generating scripts when you want that page state stored in the dashboard.
+          </div>
+
+          <div class="project-secondary-row">
+            <button class="btn-secondary" id="project-new-btn">New project</button>
+            <button class="btn-secondary" id="project-local-btn">Local projects</button>
+            <button class="btn-secondary hidden" id="project-open-dashboard-btn">Open dashboard <span class="project-link-arrow">↗</span></button>
+            <button class="btn-secondary hidden" id="project-retry-sync-btn">Retry sync</button>
+            <button class="btn-secondary hidden" id="project-migrate-btn">Migrate local</button>
+          </div>
+        </div>
+
+        <div id="project-guest-controls" class="project-guest-controls">
+          <div class="project-guest-note">
+            Locators work without login. Connect QA Deck to save AI-generated work, scripts, and history.
+          </div>
+          <div class="project-guest-actions">
+            <button class="btn-primary" id="project-connect-btn">Connect via qadeck.com</button>
+            <button class="btn-secondary" id="project-use-selectors-btn">Use Locators</button>
+          </div>
+        </div>
+
+        <div class="project-flow-note">
+          <span class="project-flow-label">Recommended flow</span>
+          <div class="project-flow-steps">
+            <span class="project-flow-step">1. Select page</span>
+            <span class="project-flow-step">2. Scan</span>
+            <span class="project-flow-step">3. Test Cases</span>
+            <span class="project-flow-step">4. Scripts</span>
+            <span class="project-flow-step">5. Save current work</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab bar ─────────────────────────────────────────────────── -->
+    <div class="tabs">
+      <button class="tab active" data-tab="scan">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <path d="M1 3.5V2a1 1 0 011-1h1.5M9.5 1H11a1 1 0 011 1v1.5M12 9.5V11a1 1 0 01-1 1H9.5M3.5 12H2a1 1 0 01-1-1V9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <circle cx="6.5" cy="6.5" r="2" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        Scan
+      </button>
+      <button class="tab hidden" data-tab="journey">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="2" cy="2" r="1.2" fill="currentColor"/>
+          <circle cx="10" cy="6" r="1.2" fill="currentColor"/>
+          <circle cx="2" cy="10" r="1.2" fill="currentColor"/>
+          <path d="M3.2 2.6l5.5 2.8M3.2 9.4l5.5-2.8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+        Journey
+      </button>
+      <button class="tab" data-tab="testcases">
+        Test Cases
+        <span class="tab-badge hidden" id="tc-badge">0</span>
+      </button>
+      <button class="tab" data-tab="script">
+        Scripts
+        <span class="tab-badge hidden" id="script-badge">5</span>
+      </button>
+      <button class="tab hidden" data-tab="cicd">
+        CI/CD
+      </button>
+      <button class="tab" data-tab="selectors">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="5" cy="5" r="3.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M8.5 8.5l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        Locators
+      </button>
+      <button class="tab" data-tab="record" style="color:#E24B4A">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1.2" opacity=".4"/><circle cx="5.5" cy="5.5" r="2.5" fill="currentColor"/></svg>
+        Capture
+      </button>
+    </div>
+    <div class="advanced-strip">
+      <button class="advanced-toggle-btn" id="advanced-toggle-btn" type="button">
+        Advanced tools
+        <span id="advanced-toggle-chevron">▾</span>
+      </button>
+      <div class="advanced-panel hidden" id="advanced-panel">
+        <button class="advanced-tool-btn" data-advanced-tab="journey" type="button">
+          Journey
+          <span class="advanced-tool-hint">Flow capture</span>
+        </button>
+        <button class="advanced-tool-btn" data-advanced-tab="cicd" type="button">
+          CI/CD
+          <span class="advanced-tool-hint">Pipeline files</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: SCAN                                                     -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="tab-scan" class="tab-content active">
+
+      <!-- Idle state -->
+      <div id="idle-state" class="center-state">
+        <div class="state-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="3" y="3" width="22" height="22" rx="6" stroke="#1D9E75" stroke-width="1.5"/>
+            <path d="M8 14h12M8 9h8M8 19h10" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <p class="state-title">Ready to scan</p>
+        <p class="state-sub">Navigate to any page, run a scan, then generate AI test cases from the scanned result.</p>
+        <button class="btn-primary full-width" id="start-scan-btn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 3.5V2a1 1 0 011-1h1.5M10.5 1H12a1 1 0 011 1v1.5M13 10.5V12a1 1 0 01-1 1h-1.5M3.5 13H2a1 1 0 01-1-1v-1.5M5 7h4M7 5v4" stroke="white" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          Start Scan
+        </button>
+      </div>
+
+      <!-- Scanning state -->
+      <div id="scanning-state" class="center-state hidden">
+        <div class="spin-ring"></div>
+        <p class="state-title" id="scan-step">Initialising...</p>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="state-sub" id="scan-detail">Starting page analysis</p>
+      </div>
+
+      <!-- Results state -->
+      <div id="results-state" class="hidden">
+        <div class="scan-summary" id="scan-summary">
+          <!-- Populated by JS -->
+        </div>
+        <!-- Mode toggle -->
+        <div class="mode-row">
+          <div class="mode-toggle-group" id="mode-toggle">
+            <button class="mode-btn active" data-mode="normal">Happy path</button>
+            <button class="mode-btn" data-mode="exploratory">Exploratory</button>
+          </div>
+          <span style="font-size:10px;color:var(--text-muted);cursor:default" title="Exploratory: focuses AI on edge cases, boundary values, negative flows and unusual behaviour">ⓘ</span>
+        </div>
+        <div class="action-row">
+          <button class="btn-secondary" id="rescan-btn">Re-scan</button>
+          <button class="btn-primary" id="generate-tc-btn">
+            Generate AI test cases →
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: JOURNEY                                                  -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="tab-journey" class="tab-content hidden">
+      <div class="journey-panel">
+        <div class="journey-header-card">
+          <div class="journey-title-row">
+            <input id="journey-name-input" class="journey-name-input" placeholder="Untitled Journey" />
+            <span class="journey-framework-pill" id="journey-framework-pill">selenium-python</span>
+          </div>
+
+          <div class="journey-metrics">
+            <div class="journey-metric">
+              <span class="journey-metric-value" id="journey-step-count">0</span>
+              <span class="journey-metric-label">Steps</span>
+            </div>
+            <div class="journey-metric">
+              <span class="journey-metric-value" id="journey-missing-count">0</span>
+              <span class="journey-metric-label">Missing transitions</span>
+            </div>
+            <div class="journey-metric">
+              <span class="journey-metric-value" id="journey-source-count">0</span>
+              <span class="journey-metric-label">Recorded steps</span>
+            </div>
+          </div>
+
+          <div class="journey-toolbar">
+            <button class="btn-secondary" id="journey-add-btn">+ Add Current Page</button>
+            <button class="btn-secondary" id="journey-import-btn">Import Capture</button>
+            <button class="btn-secondary" id="journey-fragments-btn" title="Insert a saved step fragment">⚡ Fragments</button>
+            <button class="btn-secondary" id="journey-save-btn">Save Journey</button>
+            <button class="btn-primary" id="journey-generate-btn">Generate</button>
+          </div>
+
+          <!-- Fragment Library Panel -->
+          <div id="fragment-library" class="hidden" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:10px 12px;margin-top:4px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Step Fragments</span>
+              <button id="fragment-library-close" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-muted);padding:0 2px">✕</button>
+            </div>
+            <div id="fragment-list" style="display:flex;flex-direction:column;gap:5px;max-height:150px;overflow-y:auto"></div>
+            <p style="font-size:9px;color:var(--text-muted);margin-top:6px;line-height:1.5">Save any step as a fragment using 💾 on its card. Insert it into any journey.</p>
+          </div>
+
+          <div class="journey-inline-grid">
+            <div class="journey-inline-group">
+              <label class="journey-inline-label" for="journey-session-id">Capture session</label>
+              <div class="journey-inline-row">
+                <input id="journey-session-id" class="journey-inline-input" placeholder="Paste session ID or use active one" />
+                <button class="btn-secondary" id="journey-refresh-sessions-btn">↺</button>
+              </div>
+            </div>
+
+            <div class="journey-inline-group">
+              <label class="journey-inline-label" for="journey-saved-select">Saved journeys</label>
+              <div class="journey-inline-row">
+                <select id="journey-saved-select" class="mini-select journey-saved-select">
+                  <option value="">Select saved journey</option>
+                </select>
+                <button class="btn-secondary" id="journey-load-btn">Load</button>
+                <button class="btn-secondary" id="journey-new-btn">New</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="journey-status-note" id="journey-status-note">
+            Build a multi-page flow by scanning pages and importing recordings.
+          </div>
+        </div>
+
+        <div id="journey-empty-state" class="center-state">
+          <div class="state-icon">
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+              <circle cx="5" cy="5" r="2" fill="#1D9E75"/>
+              <circle cx="21" cy="13" r="2" fill="#1D9E75"/>
+              <circle cx="5" cy="21" r="2" fill="#1D9E75"/>
+              <path d="M6.8 6.1l12.1 5.8M6.8 19.9l12.1-5.8" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p class="state-title">Start a journey</p>
+          <p class="state-sub">Scan the current page to add it as a step, or import a recording to split a real browser flow into ordered journey steps.</p>
+        </div>
+
+        <div id="journey-step-list" class="journey-step-list hidden"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: TEST CASES                                               -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="tab-testcases" class="tab-content hidden">
+
+      <!-- Generating state -->
+      <div id="tc-generating" class="center-state hidden">
+        <div class="spin-ring"></div>
+        <p class="state-title">Generating test cases...</p>
+        <p class="state-sub">Claude is analysing your page</p>
+      </div>
+
+      <!-- Empty state -->
+      <div id="tc-empty" class="center-state">
+        <p class="state-sub">No test cases yet. Scan this page first, then generate AI test cases.</p>
+        <button class="btn-secondary" id="tc-empty-scan-btn" style="margin-top:4px">← Go to Scan</button>
+      </div>
+
+      <!-- Test case list -->
+      <div id="tc-content" class="hidden">
+        <div class="tc-toolbar">
+          <span class="tc-count-label" id="tc-count-label">0 test cases</span>
+          <button class="icon-btn" id="add-tc-btn" title="Add test case" style="font-size:14px;padding:2px 7px">+</button>
+        </div>
+        <div class="tc-toolbar-sub">
+          <select id="tc-filter" class="mini-select">
+            <option value="all">All</option>
+            <option value="page">Test cases</option>
+            <option value="flow">Flow cases</option>
+            <option value="regression">Regression pack</option>
+            <option value="e2e">E2E pack</option>
+            <option value="high">High priority</option>
+            <option value="smoke">Smoke</option>
+            <option value="negative">Negative</option>
+          </select>
+          <!-- Export dropdown -->
+          <div style="position:relative;margin-left:auto">
+            <button class="btn-secondary" id="export-btn" style="padding:3px 7px;font-size:10px;gap:3px;border-radius:4px">Export ▾</button>
+            <div id="export-menu" class="hidden" style="position:absolute;right:0;top:calc(100% + 4px);background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-sm);min-width:130px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100">
+              <button id="export-csv-btn" style="display:block;width:100%;text-align:left;padding:7px 11px;font-size:11px;background:none;border:none;cursor:pointer;color:var(--text-primary);font-family:var(--font)">Export as CSV</button>
+              <button id="export-md-btn" style="display:block;width:100%;text-align:left;padding:7px 11px;font-size:11px;background:none;border:none;cursor:pointer;color:var(--text-primary);font-family:var(--font)">Export as Markdown</button>
+              <div style="height:1px;background:var(--border);margin:3px 0"></div>
+              <button id="export-testrail-btn" style="display:block;width:100%;text-align:left;padding:7px 11px;font-size:11px;background:none;border:none;cursor:pointer;color:var(--text-primary);font-family:var(--font)">TestRail CSV</button>
+              <button id="export-xray-btn" style="display:block;width:100%;text-align:left;padding:7px 11px;font-size:11px;background:none;border:none;cursor:pointer;color:var(--text-primary);font-family:var(--font)">Jira Xray JSON</button>
+            </div>
+          </div>
+        </div>
+        <!-- Coverage analysis panel -->
+        <div id="coverage-panel" class="hidden" style="border-bottom:0.5px solid var(--border-light);background:var(--bg-secondary)">
+          <div id="coverage-header" style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;font-weight:500;color:var(--text-secondary)">Coverage</span>
+              <span id="coverage-score-badge" style="font-size:10px;padding:1px 7px;border-radius:99px;font-weight:600"></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button id="coverage-heatmap-btn" class="btn-secondary" style="font-size:9px;padding:2px 8px;border-radius:4px;display:none" title="Overlay covered/uncovered elements on page">Show on Page</button>
+              <span id="coverage-chevron" style="font-size:11px;color:var(--text-muted);transition:transform 0.2s">▾</span>
+            </div>
+          </div>
+          <div id="coverage-body" class="hidden" style="padding:0 14px 10px"><!-- populated by JS --></div>
+        </div>
+        <div id="tc-list"><!-- populated by JS --></div>
+        <div class="tc-bottom">
+          <button class="btn-primary full-width" id="go-generate-script-btn">
+            Generate scripts from approved test cases →
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TAB: SCRIPT                                                   -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="tab-script" class="tab-content hidden">
+
+      <!-- Generating -->
+      <div id="script-generating" class="center-state hidden">
+        <div class="spin-ring"></div>
+        <p class="state-title">Generating scripts...</p>
+        <p class="state-sub">Building all files</p>
+      </div>
+
+      <!-- Empty state -->
+      <div id="script-empty" class="center-state">
+        <p class="state-sub">Review and approve test cases first, then generate scripts from the approved set.</p>
+        <button class="btn-secondary" id="go-tc-btn">← Review test cases</button>
+      </div>
+
+      <!-- Script content -->
+      <div id="script-content" class="hidden">
+        <div class="script-pack-row">
+          <span class="script-pack-label">Generate from</span>
+          <select id="script-pack-select" class="mini-select script-pack-select">
+            <option value="page">Test Cases</option>
+            <option value="smoke">Smoke Pack</option>
+            <option value="regression">Regression Pack</option>
+            <option value="e2e">E2E Pack</option>
+          </select>
+        </div>
+
+        <!-- Format toggle: POM vs BDD/Gherkin -->
+        <div class="format-selector" id="format-selector">
+          <button class="format-btn active" data-format="pom">POM</button>
+          <button class="format-btn" data-format="bdd">BDD / Gherkin</button>
+        </div>
+
+        <div class="fw-selector">
+          <button class="fw-btn active" data-fw="selenium-python">Selenium<br>Python</button>
+          <button class="fw-btn" data-fw="selenium-java">Selenium<br>Java</button>
+          <button class="fw-btn" data-fw="playwright-python">Playwright<br>Python</button>
+          <button class="fw-btn" data-fw="playwright-typescript">Playwright<br>TS</button>
+        </div>
+
+        <div class="file-tabs-wrap">
+          <div class="file-tabs" id="file-tabs"><!-- populated by JS --></div>
+        </div>
+
+        <div class="code-viewer">
+          <div class="code-header">
+            <span class="code-filename" id="code-filename">base_test.py</span>
+            <button class="copy-btn" id="copy-btn">Copy</button>
+          </div>
+          <pre class="code-pre" id="code-pre"></pre>
+        </div>
+
+        <!-- Script generation options -->
+        <div class="script-opts-row">
+          <label class="script-opt-toggle">
+            <input type="checkbox" id="visual-testing-toggle"/>
+            <span class="script-opt-label">Visual Regression</span>
+          </label>
+          <label class="script-opt-toggle">
+            <input type="checkbox" id="perf-assertions-toggle"/>
+            <span class="script-opt-label">Perf Assertions</span>
+          </label>
+          <label class="script-opt-toggle">
+            <input type="checkbox" id="multi-env-toggle"/>
+            <span class="script-opt-label">Multi-Env</span>
+          </label>
+        </div>
+
+        <div class="script-actions">
+          <button class="btn-secondary" id="regen-script-btn">↺ Regenerate</button>
+          <button class="btn-primary" id="download-btn">↓ Download ZIP</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- TAB: CI/CD                                                   -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <div id="tab-cicd" class="tab-content hidden">
+      <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+
+        <div class="cicd-card">
+          <div class="cicd-section-label">Selected framework</div>
+          <div id="cicd-fw-display" style="font-family:var(--mono);font-size:11px;color:var(--green)">selenium-python</div>
+        </div>
+
+        <!-- Browser checkboxes -->
+        <div>
+          <div class="cicd-section-label">Browsers</div>
+          <div id="cicd-browsers" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+
+        <!-- Options -->
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="cicd-parallel" style="accent-color:#1D9E75"/> Run browsers in parallel
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="cicd-pr" checked style="accent-color:#1D9E75"/> Trigger on pull requests
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="cicd-slack" style="accent-color:#1D9E75"/> Slack notifications
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="cicd-junit" checked style="accent-color:#1D9E75"/> JUnit XML reports
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" id="cicd-allure" style="accent-color:#1D9E75"/> Allure reporting
+          </label>
+        </div>
+
+        <!-- Branches -->
+        <div>
+          <div class="cicd-section-label">Branches</div>
+          <input id="cicd-branches" type="text" value="main, develop" class="cicd-input"/>
+        </div>
+
+        <button class="btn-primary" id="cicd-generate-btn" style="width:100%">Generate CI/CD Configs</button>
+
+        <!-- Results -->
+        <div id="cicd-ext-results" class="hidden">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px" id="cicd-file-tabs-ext"></div>
+          <div class="cicd-code-block">
+            <div class="cicd-code-header">
+              <span id="cicd-ext-filename" class="code-filename"></span>
+              <button id="cicd-copy-btn" class="copy-btn">Copy</button>
+            </div>
+            <pre id="cicd-ext-code" class="code-pre" style="max-height:260px"></pre>
+          </div>
+          <button class="btn-secondary" id="cicd-download-btn" style="width:100%;margin-top:8px">↓ Download CI/CD ZIP</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- TAB: SELECTORS                                               -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <div id="tab-selectors" class="tab-content hidden">
+
+      <!-- Framework tab bar (single-select) -->
+      <div class="sel-fw-bar">
+        <button class="sel-fw-tab active" data-fw="playwright">Playwright</button>
+        <button class="sel-fw-tab" data-fw="selenium-py">Selenium</button>
+        <button class="sel-fw-tab" data-fw="cypress">Cypress</button>
+        <button class="sel-fw-tab" data-fw="webdriverio">WDIO</button>
+      </div>
+
+      <!-- Language toggle (Selenium only) -->
+      <div class="sel-lang-bar hidden" id="sel-lang-bar">
+        <span class="sel-lang-label">Language</span>
+        <button class="sel-lang-pill active" data-lang="python">Python</button>
+        <button class="sel-lang-pill" data-lang="java">Java</button>
+      </div>
+
+      <!-- Scrollable content area -->
+      <div class="sel-scroll">
+
+        <!-- Start Inspecting + Assert Mode -->
+        <div class="sel-inspect-area">
+          <div class="sel-mode-row">
+            <button class="sel-inspect-btn" id="sel-inspect-btn">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="7" cy="7" r="1.8" fill="currentColor"/>
+                <path d="M7 1V0M7 14v-1M1 7H0M14 7h-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              Start Inspecting
+            </button>
+            <button class="sel-assert-mode-btn" id="sel-assert-mode-btn" title="Click elements on page to define assertions">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M2 7l3 3 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Assert Mode
+            </button>
+          </div>
+          <p class="sel-hint" id="sel-inspect-hint">Click to activate · hover over any element · click to capture<br/>Press <kbd>ESC</kbd> to cancel</p>
+        </div>
+
+        <!-- Assertion Builder (shown after element clicked in Assert Mode) -->
+        <div id="sel-assert-builder" class="sel-assert-builder hidden">
+          <div class="sel-area-label">✓ Add Assertion</div>
+          <div class="sel-assert-element-ref" id="sel-assert-element-ref"></div>
+          <div class="sel-assert-type-row" id="sel-assert-type-row">
+            <button class="sel-assert-type-btn active" data-type="text_equals">Text equals</button>
+            <button class="sel-assert-type-btn" data-type="is_visible">Is visible</button>
+            <button class="sel-assert-type-btn" data-type="not_exists">Not exists</button>
+            <button class="sel-assert-type-btn" data-type="attr_equals">Attr equals</button>
+            <button class="sel-assert-type-btn" data-type="url_contains">URL contains</button>
+            <button class="sel-assert-type-btn" data-type="count_equals">Count = N</button>
+          </div>
+          <select id="sel-assert-tc-select" class="sel-assert-input sel-assert-tc-select">
+            <option value="">— All test cases (AI decides placement) —</option>
+          </select>
+          <div class="sel-assert-inputs" id="sel-assert-inputs">
+            <input id="sel-assert-value" class="sel-assert-input" placeholder="Expected value..."/>
+            <input id="sel-assert-attr" class="sel-assert-input hidden" placeholder="Attribute name (e.g. href, class)..."/>
+          </div>
+          <button id="sel-assert-add-btn" class="sel-assert-add-btn">+ Add Assertion</button>
+        </div>
+
+        <!-- Custom Assertions List -->
+        <div id="sel-assertions-section" class="sel-assertions-section hidden">
+          <div class="sel-area-label">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 6l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Custom Assertions&nbsp;<span class="sel-assertions-count-badge" id="sel-assertions-count">0</span>
+          </div>
+          <div id="sel-assertions-list"></div>
+          <p class="sel-assert-note">Injected into generated test code automatically</p>
+        </div>
+
+        <!-- Test Locator -->
+        <div class="sel-test-area">
+          <div class="sel-area-label">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="4.5" cy="4.5" r="3.5" stroke="currentColor" stroke-width="1.2"/><path d="M7.5 7.5l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            Test Locator
+          </div>
+          <div class="sel-test-row">
+            <input id="sel-test-input" class="sel-test-input" placeholder="CSS selector or XPath (//...)"/>
+            <button class="sel-run-btn" id="sel-run-btn" title="Run">▶</button>
+            <button class="sel-clear-btn" id="sel-clear-btn" title="Clear">↺</button>
+          </div>
+          <div id="sel-test-result" class="sel-test-result hidden"></div>
+        </div>
+
+        <!-- Selected Element card -->
+        <div id="sel-element-card" class="sel-element-card hidden">
+          <div class="sel-area-label">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 5.5h4M5.5 3.5v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            Selected Element
+          </div>
+          <div class="sel-element-tag" id="sel-element-tag"></div>
+          <div class="sel-element-meta" id="sel-element-meta"></div>
+        </div>
+
+        <!-- Generated Locators -->
+        <div id="sel-locators-section" class="hidden">
+          <div class="sel-area-label">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 2h7M2 5h5M2 8h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            Generated Locators
+          </div>
+          <!-- Quality legend -->
+          <div class="sel-quality-legend">
+            <span class="sel-ql-item best">BEST</span>
+            <span class="sel-ql-item good">GOOD</span>
+            <span class="sel-ql-item ok">OK</span>
+            <span class="sel-ql-item fragile">FRAGILE</span>
+          </div>
+          <div id="sel-locator-groups"></div>
+        </div>
+
+        <!-- Cart button -->
+        <div class="sel-cart-bar hidden" id="sel-cart-bar">
+          <button class="sel-cart-btn" id="sel-cart-btn">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1h2l1.5 7h6l1-4H4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="11" r="1" fill="currentColor"/><circle cx="10" cy="11" r="1" fill="currentColor"/></svg>
+            Export Cart as POM
+            <span class="sel-cart-count" id="sel-cart-count">0</span>
+          </button>
+        </div>
+
+      </div><!-- /sel-scroll -->
+
+      <!-- Cart / POM Export Modal -->
+      <div class="sel-pom-overlay hidden" id="sel-pom-overlay">
+        <div class="sel-pom-modal">
+          <div class="sel-pom-header">
+            <span class="sel-pom-title">Export Page Object Model</span>
+            <button class="sel-pom-close" id="sel-pom-close">✕</button>
+          </div>
+          <div class="sel-pom-body">
+            <div class="sel-pom-field">
+              <label class="sel-pom-label">Page / Class Name</label>
+              <input id="sel-pom-name" class="sel-pom-input" placeholder="e.g. LoginPage" />
+            </div>
+            <div class="sel-pom-elements" id="sel-pom-elements"></div>
+            <div class="sel-pom-output-wrap hidden" id="sel-pom-output-wrap">
+              <div class="sel-pom-output-label">Generated POM</div>
+              <pre id="sel-pom-output" class="sel-pom-output"></pre>
+            </div>
+          </div>
+          <div class="sel-pom-footer">
+            <button class="sel-pom-generate" id="sel-pom-generate">Generate POM</button>
+            <button class="sel-pom-copy hidden" id="sel-pom-copy">⎘ Copy</button>
+            <button class="sel-pom-clear" id="sel-pom-clear">Clear Cart</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- TAB: RECORD                                                  -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <div id="tab-record" class="tab-content hidden">
+
+      <!-- Offline state -->
+      <div id="record-offline" class="center-state">
+        <div class="state-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <circle cx="14" cy="14" r="11" stroke="#E24B4A" stroke-width="1.5" opacity=".4"/>
+            <circle cx="14" cy="14" r="6" fill="#E24B4A" opacity=".7"/>
+          </svg>
+        </div>
+        <p class="state-title">Capture works locally only</p>
+        <p class="state-sub">This feature launches a real browser on your machine — it can't run on the cloud.<br><br>
+          To enable it, open Terminal and run:<br>
+          <code style="font-size:10px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:3px;margin-top:4px;display:inline-block">npx qa-deck-backend</code><br><br>
+          Keep that Terminal window open, then click "Check connection" below.
+        </p>
+        <button class="btn-primary" id="record-check-btn" style="margin-top:14px;width:100%">Check connection</button>
+      </div>
+
+      <!-- Ready state -->
+      <div id="record-ready" class="hidden" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px;font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase">Current page</div>
+          <div id="record-page-url" style="font-family:var(--mono);font-size:11px;color:var(--text-primary);word-break:break-all;line-height:1.5">—</div>
+        </div>
+
+        <button class="btn-primary" id="record-open-dashboard" style="width:100%;background:#E24B4A;border-color:#c53e3e">
+          ⏺ Open Capture Workspace ↗
+        </button>
+
+        <!-- Network Capture -->
+        <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:12px;margin-top:4px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="opacity:.6">
+                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="5" cy="4" r="1.5" fill="#1D9E75"/>
+                <circle cx="11" cy="8" r="1.5" fill="#1D9E75"/>
+                <circle cx="7" cy="12" r="1.5" fill="#1D9E75"/>
+              </svg>
+              <span style="font-size:10px;color:var(--text-muted);font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase">Capture Network Calls</span>
+            </div>
+            <button id="net-capture-toggle" style="font-size:9px;padding:2px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:var(--text-muted);cursor:pointer;letter-spacing:.5px;font-family:var(--mono);text-transform:uppercase;transition:all .15s">Off</button>
+          </div>
+          <div id="net-panel" class="hidden" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:8px 10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:10px;color:var(--text-muted);font-family:var(--mono)">API calls <span id="net-call-count" style="background:rgba(29,158,117,.2);color:#1D9E75;border-radius:8px;padding:0 5px;font-size:9px;margin-left:4px">0</span></span>
+              <span style="font-size:9px;color:var(--text-muted);opacity:.6">✓ = inject assertion</span>
+            </div>
+            <div id="net-calls-list" style="display:flex;flex-direction:column;gap:3px;max-height:130px;overflow-y:auto"></div>
+            <p style="font-size:9px;color:var(--text-muted);margin-top:6px;line-height:1.5;opacity:.7">Checked calls get <code style="font-size:8px;background:rgba(255,255,255,.06);padding:1px 4px;border-radius:2px">waitForResponse</code> assertions injected into generated tests</p>
+          </div>
+        </div>
+
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase;margin-top:6px">Active Sessions</div>
+        <div id="record-sessions-list" style="display:flex;flex-direction:column;gap:6px;min-height:32px"></div>
+
+        <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:12px;margin-top:4px">
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">Import Capture</div>
+          <p style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:8px">Stop a session in the dashboard and paste its ID here to import its test case.</p>
+          <div style="display:flex;gap:8px">
+            <input id="import-session-id" placeholder="session ID" style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--text-primary);outline:none"/>
+            <button class="btn-secondary" id="import-btn">Import</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Auth Panel (fixed bottom in app layout) ────────────────── -->
+    <div id="auth-panel" class="auth-panel">
+      <!-- Signed-out state -->
+        <div id="auth-signed-out" class="auth-signed-out">
+        <div class="auth-panel-label">Guest mode</div>
+        <div class="auth-panel-copy">Inspect elements, view locators, and test selectors without login. Connect via qadeck.com when you want projects, AI-generated work, and saved history.</div>
+        <div class="auth-panel-actions">
+          <button id="auth-connect-btn" class="auth-connect-btn">Connect via qadeck.com</button>
+          <button id="auth-selector-btn" class="auth-secondary-btn">Use Locators</button>
+        </div>
+      </div>
+      <!-- Signed-in state -->
+      <div id="auth-signed-in" class="auth-signed-in hidden">
+        <img id="auth-avatar" class="auth-avatar" src="" alt="avatar" />
+        <div class="auth-user-info">
+          <div id="auth-display-name" class="auth-display-name"></div>
+          <div id="auth-email" class="auth-email"></div>
+        </div>
+        <button id="auth-projects-btn" class="auth-projects-btn">Open dashboard</button>
+        <button id="auth-signout-btn" class="auth-signout-btn">Sign out</button>
+      </div>
+    </div>
+
+  </div><!-- /#app -->
+
+  <div id="project-modal" class="project-modal hidden">
+    <div class="project-modal-card">
+      <div class="project-modal-head">
+        <div>
+          <div class="project-modal-label">Project + page</div>
+          <div class="project-modal-title" id="project-modal-title">Save current page</div>
+        </div>
+        <button class="icon-btn project-modal-close" id="project-modal-close">✕</button>
+      </div>
+
+      <div class="project-modal-section">
+        <div id="project-modal-project-note" class="project-modal-hint hidden" style="margin-bottom:10px"></div>
+        <div class="project-modal-grid">
+          <div id="project-modal-project-field">
+            <label class="project-modal-field-label" for="project-modal-app-name">Project name</label>
+            <input id="project-modal-app-name" class="project-modal-input" placeholder="e.g. Sauce Demo" />
+          </div>
+          <div>
+            <label class="project-modal-field-label" for="project-modal-page-label">Page label</label>
+            <input id="project-modal-page-label" class="project-modal-input" placeholder="e.g. Login" />
+          </div>
+        </div>
+
+        <button type="button" class="btn-secondary" id="project-modal-customize-name-btn" style="width:100%;margin-top:10px">
+          Customize saved title
+        </button>
+
+        <div id="project-modal-name-section" class="hidden" style="margin-top:10px">
+          <label class="project-modal-field-label" id="project-modal-name-label" for="project-modal-name">Saved title</label>
+          <input id="project-modal-name" class="project-modal-input" placeholder="Sauce Demo · Login" />
+        </div>
+
+        <div class="project-modal-grid">
+          <div>
+            <label class="project-modal-field-label" for="project-modal-storage">Storage</label>
+            <select id="project-modal-storage" class="mini-select project-modal-select">
+              <option value="cloud">Cloud project</option>
+              <option value="local">Local project</option>
+            </select>
+          </div>
+          <div>
+            <label class="project-modal-field-label" for="project-modal-status">Status</label>
+            <select id="project-modal-status" class="mini-select project-modal-select">
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="review">Review</option>
+              <option value="done">Done</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="project-modal-field-label" for="project-modal-tags">Tags</label>
+        <input id="project-modal-tags" class="project-modal-input" placeholder="smoke, checkout, release-1" />
+      </div>
+
+      <div class="project-modal-footer">
+        <button class="btn-secondary" id="project-modal-cancel">Cancel</button>
+        <button class="btn-primary" id="project-modal-create-btn">Create page</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-mismatch-modal" class="project-modal hidden">
+    <div class="project-modal-card page-mismatch-card">
+      <div class="project-modal-head">
+        <div>
+          <div class="project-modal-label">Save guard</div>
+          <div class="project-modal-title">You are on a different page</div>
+        </div>
+        <button class="icon-btn project-modal-close" id="page-mismatch-close">✕</button>
+      </div>
+
+      <div class="project-modal-section">
+        <div id="page-mismatch-copy" class="project-modal-hint" style="margin-bottom:10px">
+          The current browser page looks different from the selected saved page.
+        </div>
+        <div class="page-mismatch-grid">
+          <div class="page-mismatch-item">
+            <label class="project-modal-field-label">Selected page</label>
+            <div class="page-mismatch-value" id="page-mismatch-selected">Current page</div>
+          </div>
+          <div class="page-mismatch-item">
+            <label class="project-modal-field-label">Detected page</label>
+            <div class="page-mismatch-value" id="page-mismatch-detected">Detected page</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-modal-footer">
+        <button class="btn-secondary" id="page-mismatch-cancel">Cancel</button>
+        <button class="btn-secondary" id="page-mismatch-save-anyway">Save anyway</button>
+        <button class="btn-primary" id="page-mismatch-create-page">Create new page</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="login-required-modal" class="bug-modal hidden">
+    <div class="bug-modal-card">
+      <div class="bug-modal-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M5.5 7V5.5a2.5 2.5 0 015 0V7M4 7h8v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7z" stroke="#1D9E75" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span class="bug-modal-title" id="login-required-title">Login required</span>
+        </div>
+        <button class="icon-btn" id="login-required-close">✕</button>
+      </div>
+
+      <div class="bug-modal-body">
+        <p id="login-required-copy" style="font-size:12px;color:var(--text-secondary);line-height:1.7">
+          Connect QA Deck on qadeck.com to sync projects, history, and generated test assets.
+        </p>
+        <div class="project-guest-note">
+          Selectors stays available without login, so you can still inspect and validate locators while you are disconnected.
+        </div>
+      </div>
+
+      <div class="bug-modal-foot">
+        <button class="btn-secondary" id="login-required-selectors-btn" style="flex:1">Use Locators</button>
+        <button class="btn-secondary" id="login-required-open-btn" style="flex:1">Open connect page</button>
+        <button class="btn-primary" id="login-required-connect-btn" style="flex:1">Continue on qadeck.com</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="jszip.min.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="sidepanel.js"></script>
+  <script src="firebase-auth.js"></script>
+</body>
+</html>

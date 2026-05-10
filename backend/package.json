@@ -1,0 +1,29 @@
+{
+  "name": "qa-deck-backend",
+  "version": "1.0.2",
+  "description": "Local backend for the QA Deck Chrome extension — enables Capture and AI test generation",
+  "main": "server.js",
+  "bin": {
+    "qa-deck-backend": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No automated tests configured yet.\""
+  },
+  "keywords": [
+    "qa",
+    "test-automation",
+    "playwright",
+    "selenium",
+    "chrome-extension"
+  ],
+  "author": "QA Deck",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}

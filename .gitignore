@@ -1,0 +1,34 @@
+# IDE / AI tool configs — local only
+.claude/
+.cursor/
+**/.claude/
+**/.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# All node_modules
+**/node_modules/
+
+# Next.js build
+.next/
+out/
+
+# Secrets — never commit these
+website/.env.local
+website/.env.*.local
+backend/.env
+
+# Backend project data (user data, not source code)
+backend/projects/*.json
+
+# Chrome extension zip artifacts
+*.zip
+
+# Vercel
+website/.vercel
+
+# TypeScript
+website/*.tsbuildinfo
+website/next-env.d.ts

@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QA Deck — Capture Workspace</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --green:#1D9E75;--green-dim:#0F6E56;--green-glow:rgba(29,158,117,.12);--green-line:rgba(29,158,117,.3);
+  --bg:#0c0d0e;--bg-1:#111213;--bg-2:#161718;--bg-3:#1c1d1f;
+  --border:rgba(255,255,255,.07);--border-md:rgba(255,255,255,.12);
+  --text-1:#f0f0ee;--text-2:#9a9a96;--text-3:#5a5a58;
+  --red:#E24B4A;--blue:#378ADD;--amber:#d97706;--purple:#a78bfa;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text-1);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Top bar ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 18px;height:46px;border-bottom:1px solid var(--border);background:var(--bg-1);flex-shrink:0}
+.logo{display:flex;align-items:center;gap:8px;text-decoration:none}
+.logo-mark{width:22px;height:22px;border-radius:5px;background:var(--green);display:flex;align-items:center;justify-content:center}
+.logo-name{font-family:var(--mono);font-size:12px;color:var(--text-1)}.logo-name span{color:var(--green)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid var(--border-md);background:var(--bg-2);color:var(--text-2);transition:all .15s;font-family:var(--sans);white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--bg-3);color:var(--text-1)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-green{background:var(--green);color:#fff;border-color:var(--green)}.btn-green:hover:not(:disabled){background:var(--green-dim)!important;color:#fff!important}
+.btn-red{background:var(--red);color:#fff;border-color:var(--red)}.btn-red:hover:not(:disabled){background:#b83737!important;color:#fff!important}
+
+/* ── URL bar ── */
+.urlbar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
+.url-input{flex:1;background:var(--bg-2);border:1px solid var(--border);border-radius:5px;padding:7px 11px;font-family:var(--mono);font-size:12px;color:var(--text-1);outline:none;transition:border-color .15s}
+.url-input:focus{border-color:var(--green-line)}
+.rec-dot{width:8px;height:8px;border-radius:50%;background:var(--text-3);flex-shrink:0;transition:all .3s}
+.rec-dot.on{background:var(--red);box-shadow:0 0 7px var(--red);animation:rpulse 1s ease-in-out infinite}
+@keyframes rpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.counter{font-family:var(--mono);font-size:11px;color:var(--text-3);min-width:72px}
+.counter .n{color:var(--green);font-weight:500}
+
+/* ── Main layout ── */
+.main{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* ── Preview ── */
+.preview{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;overflow:hidden}
+.preview-bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
+.preview-url{font-family:var(--mono);font-size:10px;color:var(--text-3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid var(--green-line);background:var(--green-glow);color:var(--green)}
+.iframe-wrap{flex:1;position:relative;background:#fff;overflow:hidden}
+.iframe-wrap iframe{width:100%;height:100%;border:none;display:block}
+.rec-border{position:absolute;inset:0;pointer-events:none;border:2px solid transparent;transition:border-color .3s}
+.rec-border.on{border-color:var(--red)}
+.start-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-1);gap:14px;padding:40px;text-align:center}
+.start-icon{font-size:40px;filter:grayscale(1)opacity(.25)}
+
+/* ── Right panel ── */
+.panel{width:380px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-1)}
+
+/* ── Panel tabs ── */
+.ptabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.ptabs::-webkit-scrollbar{display:none}
+.ptab{padding:10px 13px;font-family:var(--mono);font-size:9px;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.5px;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.ptab:hover{color:var(--text-2)}
+.ptab.active{color:var(--green);border-bottom-color:var(--green)}
+.ptab .badge{display:inline-block;background:var(--bg-3);border:1px solid var(--border);color:var(--text-3);font-size:9px;padding:0 5px;border-radius:99px;margin-left:4px;min-width:16px;text-align:center}
+.ptab.active .badge{background:var(--green-glow);border-color:var(--green-line);color:var(--green)}
+
+/* ── Panel bodies ── */
+.pbody{flex:1;overflow-y:auto;padding:12px;display:none}
+.pbody.active{display:block}
+.pbody::-webkit-scrollbar{width:4px}.pbody::-webkit-scrollbar-track{background:transparent}.pbody::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:99px}
+
+/* ── Action rows ── */
+.arow{display:flex;align-items:flex-start;gap:7px;padding:7px 9px;border-radius:5px;border:1px solid var(--border);background:var(--bg-2);margin-bottom:4px;animation:ain .18s ease}
+@keyframes ain{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
+.arow:last-child{border-color:var(--green-line)}
+.atype{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:3px;flex-shrink:0;min-width:48px;text-align:center;margin-top:1px}
+.t-navigate{background:rgba(55,138,221,.12);color:var(--blue);border:1px solid rgba(55,138,221,.2)}
+.t-click{background:rgba(217,119,6,.12);color:var(--amber);border:1px solid rgba(217,119,6,.2)}
+.t-fill{background:var(--green-glow);color:var(--green);border:1px solid var(--green-line)}
+.t-select,.t-check,.t-radio{background:rgba(167,139,250,.12);color:var(--purple);border:1px solid rgba(167,139,250,.2)}
+.t-press,.t-submit{background:rgba(255,255,255,.04);color:var(--text-2);border:1px solid var(--border)}
+.abody{flex:1;min-width:0}
+.amain{font-size:11px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aloc{font-family:var(--mono);font-size:9px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.adel{width:16px;height:16px;border:none;background:transparent;color:var(--text-3);cursor:pointer;border-radius:3px;opacity:0;font-size:13px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;margin-top:1px}
+.arow:hover .adel{opacity:1}.adel:hover{color:var(--red)}
+
+/* ── Steps ── */
+.srow{display:flex;gap:9px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg-2);margin-bottom:4px}
+.snum{font-family:var(--mono);font-size:10px;color:var(--text-3);min-width:18px;padding-top:1px}
+.stxt{font-size:12px;color:var(--text-1);flex:1;outline:none;line-height:1.6;cursor:text}
+.stxt:focus{color:var(--text-1)}
+
+/* ── Code panel ── */
+.fw-switcher{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px}
+.fw-btn{padding:8px 6px;border-radius:5px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-3);cursor:pointer;text-align:center;font-size:11px;line-height:1.4;transition:all .15s}
+.fw-btn:hover{border-color:var(--border-md);color:var(--text-2)}
+.fw-btn.active{border-color:var(--green-line);background:var(--green-glow);color:var(--green)}
+.fw-btn strong{display:block;font-family:var(--mono);font-size:11px;margin-bottom:1px}
+.code-wrap{border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.code-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 11px;background:var(--bg-3);border-bottom:1px solid var(--border)}
+.code-fn{font-family:var(--mono);font-size:10px;color:var(--text-2)}
+.copybtn{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-3);cursor:pointer;transition:all .15s}
+.copybtn:hover{color:var(--green);border-color:var(--green-line)}
+.code-pre{padding:11px;font-family:var(--mono);font-size:10px;color:var(--text-2);line-height:1.75;overflow-x:auto;white-space:pre;max-height:420px;overflow-y:auto}
+.code-spin{text-align:center;padding:30px;color:var(--text-3);font-size:12px}
+.code-spin::before{content:'';display:block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Test case panel ── */
+.tc-toolbar{display:flex;flex-direction:column;gap:10px}
+.tc-summary{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;color:var(--text-3)}
+.tc-mini-label{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;min-width:52px}
+.tc-chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.tc-chip{padding:6px 9px;border-radius:999px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-3);cursor:pointer;font-family:var(--mono);font-size:10px;transition:all .15s}
+.tc-chip:hover{border-color:var(--border-md);color:var(--text-2)}
+.tc-chip.active{background:var(--green-glow);border-color:var(--green-line);color:var(--green)}
+.tc-action-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tc-filter-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tc-action-btn{padding:7px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-2);font-size:11px;cursor:pointer;transition:all .15s}
+.tc-action-btn:hover:not(:disabled){border-color:var(--border-md);background:var(--bg-3);color:var(--text-1)}
+.tc-action-btn:disabled{opacity:.45;cursor:not-allowed}
+.tc-action-btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+.tc-action-btn.primary:hover:not(:disabled){background:var(--green-dim);border-color:var(--green-dim)}
+.tc-status{font-size:11px;color:var(--text-3);padding:8px 0}
+.tc-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.tc-card{border:1px solid var(--border);border-radius:7px;background:var(--bg-2);overflow:hidden}
+.tc-card.expanded{border-color:var(--green-line)}
+.tc-card-top{display:flex;align-items:flex-start;gap:8px;padding:10px}
+.tc-select{width:18px;height:18px;border-radius:4px;border:1px solid var(--border-md);background:var(--bg-1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:transparent;flex-shrink:0;margin-top:2px}
+.tc-select.selected{background:var(--green);border-color:var(--green);color:#fff}
+.tc-main{flex:1;min-width:0;cursor:pointer}
+.tc-title-line{font-size:12px;color:var(--text-1);line-height:1.5}
+.tc-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px}
+.badge-high{background:rgba(226,75,74,.1);color:#f87171;border:1px solid rgba(226,75,74,.2)}
+.badge-medium{background:rgba(217,119,6,.1);color:#fbbf24;border:1px solid rgba(217,119,6,.2)}
+.badge-low{background:var(--green-glow);color:var(--green);border:1px solid var(--green-line)}
+.badge-cat,.badge-source{background:var(--bg-3);color:var(--text-2);border:1px solid var(--border)}
+.tc-actions{display:flex;gap:4px;flex-shrink:0}
+.tc-icon-btn{padding:5px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg-1);color:var(--text-3);cursor:pointer;font-size:10px;transition:all .15s}
+.tc-icon-btn:hover{border-color:var(--border-md);background:var(--bg-3);color:var(--text-1)}
+.tc-icon-btn.danger:hover{color:#f87171;border-color:rgba(226,75,74,.3)}
+.tc-card-body{border-top:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:10px}
+.tc-field{display:flex;flex-direction:column;gap:5px}
+.tc-label{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px}
+.tc-val{font-size:12px;color:var(--text-1);line-height:1.6}
+.tc-val.mono{font-family:var(--mono);font-size:10px;white-space:pre-wrap}
+.tc-step-list{display:flex;flex-direction:column;gap:5px}
+.tc-step-row{display:flex;gap:7px;font-size:11px;color:var(--text-2);padding:4px 0;border-bottom:1px solid var(--border)}
+.tc-step-row:last-child{border-bottom:none}
+.tc-step-num{color:var(--text-3);font-family:var(--mono);font-size:10px;min-width:16px}
+.tc-edit-grid{display:flex;flex-direction:column;gap:8px}
+.tc-input,.tc-textarea,.tc-select-input{width:100%;background:var(--bg-1);border:1px solid var(--border);border-radius:5px;padding:8px 10px;font-size:11px;color:var(--text-1);outline:none;font-family:var(--sans)}
+.tc-textarea{resize:vertical;min-height:70px;line-height:1.6}
+.tc-input:focus,.tc-textarea:focus,.tc-select-input:focus{border-color:var(--green-line)}
+.tc-edit-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tc-body-actions{display:flex;gap:6px;justify-content:flex-end}
+.tc-empty{padding:34px 16px;text-align:center;color:var(--text-3);font-size:12px;line-height:1.8;border:1px dashed var(--border);border-radius:7px;margin-top:10px}
+.tc-generating{text-align:center;padding:30px;color:var(--text-3);font-size:12px}
+.tc-generating::before{content:'';display:block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+
+/* ── Settings ── */
+.setting-row{margin-bottom:14px}
+.setting-label{font-family:var(--mono);font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.setting-input{width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--text-1);outline:none;transition:border-color .15s}
+.setting-input:focus{border-color:var(--green-line)}
+.setting-hint{font-size:10px;color:var(--text-3);margin-top:4px;line-height:1.6}
+
+/* ── Bottom bar ── */
+.bottombar{display:flex;align-items:center;gap:7px;padding:9px 14px;border-top:1px solid var(--border);background:var(--bg-1);flex-shrink:0}
+.bottombar .btn{flex:1;justify-content:center}
+
+/* ── Empty states ── */
+.empty{text-align:center;padding:36px 16px;color:var(--text-3);font-size:12px;line-height:1.8}
+.empty .ei{font-size:28px;margin-bottom:10px;filter:grayscale(1)opacity(.3)}
+
+/* ── Toast ── */
+.toasts{position:fixed;bottom:14px;right:14px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.toast{padding:9px 13px;border-radius:5px;font-size:12px;border:1px solid;animation:tin .18s ease;white-space:nowrap}
+@keyframes tin{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+.ts{background:rgba(29,158,117,.12);border-color:var(--green-line);color:var(--green)}
+.te{background:rgba(226,75,74,.12);border-color:rgba(226,75,74,.3);color:#f87171}
+.ti{background:rgba(55,138,221,.12);border-color:rgba(55,138,221,.3);color:var(--blue)}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="/" class="logo">
+    <div class="logo-mark"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M2 4h5.5M2 9h7" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+    <span class="logo-name">QA <span>Deck</span> / capture</span>
+  </a>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="hdr-status" style="font-family:var(--mono);font-size:10px;color:var(--text-3)">idle</span>
+    <a href="/" class="btn">← Local Engine</a>
+  </div>
+</header>
+
+<!-- URL bar -->
+<div class="urlbar">
+  <div class="rec-dot" id="rec-dot"></div>
+  <input class="url-input" id="url-input" type="url" placeholder="https://example.com/login"/>
+  <button class="btn btn-green" id="load-btn" onclick="loadPage()">Load</button>
+  <button class="btn btn-green" id="start-btn" onclick="startRecording()" disabled>⏺ Start Capture</button>
+  <button class="btn btn-red"   id="stop-btn"  onclick="stopRecording()"  disabled>⏹ Stop</button>
+  <div class="counter"><span class="n" id="act-count">0</span> actions</div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Left: embedded browser -->
+  <div class="preview">
+    <div class="preview-bar">
+      <div class="preview-url" id="preview-url">Enter a URL above and click Load</div>
+      <span class="preview-badge" id="preview-badge" style="display:none">✓ injected</span>
+    </div>
+    <div class="iframe-wrap">
+      <div class="start-screen" id="start-screen">
+        <div class="start-icon">🌐</div>
+        <div style="font-size:15px;font-weight:500;color:var(--text-2)">Embedded Browser</div>
+        <div style="font-size:12px;color:var(--text-3);max-width:360px;line-height:1.8">
+          Enter any URL and click <strong style="color:var(--text-2)">Load</strong>. The page opens here.<br>
+          Then click <strong style="color:var(--red)">⏺ Start Capture</strong> and interact normally.<br>
+          Your clicks and inputs are captured in real time.
+        </div>
+        <div style="font-size:11px;color:var(--text-3);background:var(--bg-2);border:1px solid var(--border);border-radius:5px;padding:10px 14px;max-width:360px;line-height:1.8;margin-top:4px">
+          ⚠ Sites that block iframes (e.g. Google, Facebook) won't load here.<br>
+          Use a local or staging URL instead.
+        </div>
+      </div>
+      <iframe id="preview-frame" style="display:none"></iframe>
+      <div class="rec-border" id="rec-border"></div>
+    </div>
+  </div>
+
+  <!-- Right: panel -->
+  <div class="panel">
+
+    <!-- Tabs -->
+    <div class="ptabs">
+      <div class="ptab active" data-p="actions" onclick="switchPanel('actions',this)">Actions <span class="badge" id="b-actions">0</span></div>
+      <div class="ptab" data-p="steps"   onclick="switchPanel('steps',this)">Steps <span class="badge" id="b-steps">0</span></div>
+      <div class="ptab" data-p="code"    onclick="switchPanel('code',this)">Code</div>
+      <div class="ptab" data-p="testcase" onclick="switchPanel('testcase',this)">Test Case</div>
+      <div class="ptab" data-p="settings" onclick="switchPanel('settings',this)">Settings</div>
+    </div>
+
+    <!-- Actions -->
+    <div class="pbody active" id="pbody-actions">
+      <div class="empty" id="empty-actions"><div class="ei">⏺</div>Load a page, click ⏺ Start Capture,<br>then interact with the page.</div>
+      <div id="actions-list"></div>
+    </div>
+
+    <!-- Steps -->
+    <div class="pbody" id="pbody-steps">
+      <div class="empty" id="empty-steps"><div class="ei">📋</div>Steps appear after stopping recording.</div>
+      <div id="steps-list"></div>
+    </div>
+
+    <!-- Code -->
+    <div class="pbody" id="pbody-code" style="padding:10px">
+      <!-- Framework switcher -->
+      <div class="fw-switcher">
+        <div class="fw-btn active" data-fw="playwright-python"     onclick="switchFw(this)"><strong>Playwright</strong>Python</div>
+        <div class="fw-btn"        data-fw="playwright-typescript" onclick="switchFw(this)"><strong>Playwright</strong>TypeScript</div>
+        <div class="fw-btn"        data-fw="selenium-python"       onclick="switchFw(this)"><strong>Selenium</strong>Python</div>
+        <div class="fw-btn"        data-fw="selenium-java"         onclick="switchFw(this)"><strong>Selenium</strong>Java</div>
+      </div>
+      <div class="code-wrap">
+        <div class="code-hdr">
+          <span class="code-fn" id="code-fn">—</span>
+          <button class="copybtn" onclick="copyCode()">Copy</button>
+        </div>
+        <div id="code-body">
+          <pre class="code-pre" style="color:var(--text-3);font-style:italic">Click Generate after recording.</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test Case -->
+    <div class="pbody" id="pbody-testcase" style="padding:10px">
+      <div class="tc-toolbar">
+        <div class="tc-summary">
+          <span id="tc-summary-label">0 test cases</span>
+          <span id="tc-selection-label">0 selected</span>
+        </div>
+        <div class="tc-filter-row">
+          <span class="tc-mini-label">Focus</span>
+          <button class="tc-chip active" data-suite="page" onclick="toggleSuiteType('page', this)">Page</button>
+          <button class="tc-chip" data-suite="e2e" onclick="toggleSuiteType('e2e', this)">E2E</button>
+          <button class="tc-chip" data-suite="regression" onclick="toggleSuiteType('regression', this)">Regression</button>
+          <button class="tc-chip" data-suite="smoke" onclick="toggleSuiteType('smoke', this)">Smoke</button>
+        </div>
+        <div class="tc-chip-row">
+          <button class="tc-chip active" data-scenario="positive" onclick="toggleScenarioType('positive', this)">Positive</button>
+          <button class="tc-chip" data-scenario="negative" onclick="toggleScenarioType('negative', this)">Negative</button>
+          <button class="tc-chip" data-scenario="boundary" onclick="toggleScenarioType('boundary', this)">Boundary</button>
+          <button class="tc-chip" data-scenario="navigation" onclick="toggleScenarioType('navigation', this)">Navigation</button>
+          <button class="tc-chip" data-scenario="ui" onclick="toggleScenarioType('ui', this)">UI</button>
+          <button class="tc-chip" data-scenario="accessibility" onclick="toggleScenarioType('accessibility', this)">Accessibility</button>
+          <button class="tc-chip" data-scenario="all_possible" onclick="toggleScenarioType('all_possible', this)">All Possible</button>
+        </div>
+        <div class="tc-action-row">
+          <button class="tc-action-btn primary" id="tc-generate-btn" onclick="generateScenarioTestCases(false)">Generate</button>
+          <button class="tc-action-btn" id="tc-add-all-btn" onclick="generateScenarioTestCases(true)">Add All Possible</button>
+          <button class="tc-action-btn" id="tc-add-manual-btn" onclick="addManualTestCase()">Add Manual</button>
+          <button class="tc-action-btn" id="tc-copy-selected-btn" onclick="copySelectedTestCases()" disabled>Copy Selected</button>
+        </div>
+        <div class="tc-filter-row">
+          <span class="tc-mini-label">List</span>
+          <button class="tc-chip active" data-list-filter="all" onclick="setCaseListFilter('all', this)">All</button>
+          <button class="tc-chip" data-list-filter="selected" onclick="setCaseListFilter('selected', this)">Selected</button>
+          <button class="tc-chip" data-list-filter="page" onclick="setCaseListFilter('page', this)">Page</button>
+          <button class="tc-chip" data-list-filter="e2e" onclick="setCaseListFilter('e2e', this)">E2E</button>
+          <button class="tc-chip" data-list-filter="regression" onclick="setCaseListFilter('regression', this)">Regression</button>
+          <button class="tc-chip" data-list-filter="smoke" onclick="setCaseListFilter('smoke', this)">Smoke</button>
+        </div>
+        <div class="tc-status" id="tc-generation-status">Choose scenario types and generate QA-ready test cases from the page or recorded flow.</div>
+      </div>
+      <div class="tc-list" id="tc-case-list"></div>
+      <div class="tc-empty" id="tc-case-empty">
+        Capture a flow or load a page, then generate QA test cases from the selected scenario types.
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="pbody" id="pbody-settings" style="padding:14px">
+
+      <!-- AI Provider -->
+      <div class="setting-row">
+        <div class="setting-label">AI Provider</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">
+          <div class="fw-btn active" id="prov-claude"  onclick="selectProvider('claude',this)"  style="font-size:10px;padding:7px 4px"><strong style="font-size:11px">Claude</strong>Anthropic</div>
+          <div class="fw-btn"        id="prov-gemini"  onclick="selectProvider('gemini',this)"  style="font-size:10px;padding:7px 4px"><strong style="font-size:11px">Gemini</strong>Google</div>
+          <div class="fw-btn"        id="prov-openai"  onclick="selectProvider('openai',this)"  style="font-size:10px;padding:7px 4px"><strong style="font-size:11px">GPT-4o</strong>OpenAI</div>
+        </div>
+        <div id="provider-hints" style="font-size:10px;color:var(--text-3);background:var(--bg-2);border:1px solid var(--border);border-radius:4px;padding:8px 10px;line-height:1.8"></div>
+      </div>
+
+      <!-- API Key -->
+      <div class="setting-row">
+        <div class="setting-label">API Key</div>
+        <input class="setting-input" id="settings-api-key" type="password" autocomplete="off"
+          placeholder="Paste your API key here..."/>
+        <div class="setting-hint" id="key-hint" style="margin-top:4px">Stored in your browser only. Never sent to anyone except the selected AI provider.</div>
+      </div>
+
+      <!-- Framework -->
+      <div class="setting-row">
+        <div class="setting-label">Default framework</div>
+        <select class="setting-input" id="settings-fw">
+          <option value="playwright-python">Playwright Python</option>
+          <option value="playwright-typescript">Playwright TypeScript</option>
+          <option value="selenium-python">Selenium Python</option>
+          <option value="selenium-java">Selenium Java</option>
+        </select>
+      </div>
+
+      <!-- Panel width -->
+      <div class="setting-row">
+        <div class="setting-label">Panel width</div>
+        <input class="setting-input" id="settings-width" type="number" value="380" min="280" max="600" step="10"/>
+        <div class="setting-hint">Right panel width in pixels.</div>
+      </div>
+
+      <button class="btn btn-green" onclick="saveSettings()" style="width:100%;justify-content:center;margin-top:4px">Save Settings</button>
+    </div>
+
+  </div><!-- /.panel -->
+</div><!-- /.main -->
+
+<!-- Bottom bar -->
+<div class="bottombar">
+  <button class="btn btn-green" id="gen-btn" onclick="generateAll()" disabled>→ Generate</button>
+  <button class="btn" id="dl-btn" onclick="downloadZip()" disabled>↓ ZIP</button>
+  <button class="btn" id="save-btn" onclick="saveToProject()" disabled>Save Project</button>
+  <button class="btn" onclick="clearAll()" style="color:var(--text-3)">Clear</button>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+const API = 'http://localhost:3747';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let S = {
+  recording: false,
+  frameReady: false,
+  actions: [],
+  steps: [],
+  codeCache: { 'playwright-python':'', 'playwright-typescript':'', 'selenium-python':'', 'selenium-java':'' },
+  fw: 'playwright-python',
+  testCases: [],
+  selectedCaseIds: [],
+  activeSuiteTypes: ['page'],
+  activeScenarioTypes: ['positive'],
+  caseListFilter: 'all',
+  expandedCaseIds: [],
+  editingCaseId: null,
+  pollTimer: null,
+  apiKey: '',
+  provider: 'claude',  // 'claude' | 'gemini' | 'openai'
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Provider config ───────────────────────────────────────────────────────────
+const PROVIDERS = {
+  claude: {
+    name: 'Claude (Anthropic)',
+    placeholder: 'sk-ant-api03-...',
+    hint: '🔑 Get free $5 credit at console.anthropic.com → API Keys',
+    detect: k => k.startsWith('sk-ant'),
+  },
+  gemini: {
+    name: 'Gemini (Google)',
+    placeholder: 'AIzaSy...',
+    hint: '🆓 Free tier: 1,500 requests/day. Get key at aistudio.google.com → Get API Key',
+    detect: k => k.startsWith('AIza'),
+  },
+  openai: {
+    name: 'GPT-4o-mini (OpenAI)',
+    placeholder: 'sk-proj-... or sk-...',
+    hint: '🔑 Get key at platform.openai.com → API Keys. Uses gpt-4o-mini (cheapest model)',
+    detect: k => k.startsWith('sk-') && !k.startsWith('sk-ant'),
+  },
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('qa_settings');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      if (s.apiKey)    { S.apiKey = s.apiKey; document.getElementById('settings-api-key').value = s.apiKey; }
+      if (s.fw)        { S.fw = s.fw; document.getElementById('settings-fw').value = s.fw; activateFwBtn(s.fw); }
+      if (s.width)     { document.querySelector('.panel').style.width = s.width+'px'; document.getElementById('settings-width').value = s.width; }
+      if (s.provider)  { selectProvider(s.provider, document.getElementById('prov-'+s.provider)); }
+    } catch(e) {}
+  }
+  updateProviderHint();
+  initTestCaseWorkspace();
+
+  // Pre-fill URL from ?url= query param (passed by extension)
+  const presetUrl = new URLSearchParams(location.search).get('url');
+  if (presetUrl) document.getElementById('url-input').value = presetUrl;
+
+  // Auto-detect provider when user pastes a key
+  document.getElementById('settings-api-key').addEventListener('input', function() {
+    const k = this.value.trim();
+    for (const [id, p] of Object.entries(PROVIDERS)) {
+      if (p.detect(k)) { selectProvider(id, document.getElementById('prov-'+id)); break; }
+    }
+  });
+});
+
+function selectProvider(id, el) {
+  S.provider = id;
+  document.querySelectorAll('#prov-claude,#prov-gemini,#prov-openai').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  updateProviderHint();
+}
+
+function updateProviderHint() {
+  const p = PROVIDERS[S.provider || 'claude'];
+  const hintEl = document.getElementById('provider-hints');
+  const inputEl = document.getElementById('settings-api-key');
+  if (hintEl) hintEl.textContent = p.hint;
+  if (inputEl) inputEl.placeholder = p.placeholder;
+}
+
+function saveSettings() {
+  S.apiKey   = document.getElementById('settings-api-key').value.trim();
+  S.fw       = document.getElementById('settings-fw').value;
+  const w    = parseInt(document.getElementById('settings-width').value) || 380;
+  document.querySelector('.panel').style.width = w+'px';
+  activateFwBtn(S.fw);
+  localStorage.setItem('qa_settings', JSON.stringify({ apiKey: S.apiKey, fw: S.fw, width: w, provider: S.provider || 'claude' }));
+  toast('Settings saved ✓', 's');
+}
+
+// ── Load page (with automatic proxy fallback) ────────────────────────────────
+async function loadPage() {
+  let url = document.getElementById('url-input').value.trim();
+  if (!url) { toast('Enter a URL', 'e'); return; }
+  if (!url.startsWith('http')) url = 'https://' + url;
+  document.getElementById('url-input').value = url;
+
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('preview-url').textContent = 'Loading…';
+  document.getElementById('preview-badge').style.display = 'none';
+  document.getElementById('load-btn').disabled = true;
+  S.frameReady = false;
+
+  // Same-origin pages can be loaded directly. External sites should go
+  // straight to proxy mode to avoid a flash followed by a disappearing page.
+  const targetOrigin = new URL(url).origin;
+  if (targetOrigin === window.location.origin) {
+    await tryLoadDirect(url);
+  } else {
+    useProxy(url);
+  }
+  document.getElementById('load-btn').disabled = false;
+}
+
+function tryLoadDirect(url) {
+  return new Promise((resolve) => {
+    const frame = document.getElementById('preview-frame');
+    frame.style.display = 'block';
+    frame.src = url;
+
+    const timeout = setTimeout(() => {
+      // Timeout — fall back to proxy
+      useProxy(url);
+      resolve();
+    }, 6000);
+
+    frame.onload = () => {
+      clearTimeout(timeout);
+      // Try injection — if it throws, site is cross-origin, use proxy
+      try {
+        frame.contentWindow.document; // throws if cross-origin
+        injectCapture(frame);
+        resolve();
+      } catch(e) {
+        useProxy(url);
+        resolve();
+      }
+    };
+  });
+}
+
+function useProxy(url) {
+  const proxyUrl = API + '/api/proxy?url=' + encodeURIComponent(url);
+  const frame = document.getElementById('preview-frame');
+  S.proxyUrl = proxyUrl;
+  S.originalUrl = url;
+  document.getElementById('preview-url').textContent = 'Loading via proxy…';
+  frame.style.display = 'block';
+  frame.src = proxyUrl;
+
+  frame.onload = () => {
+    S.frameReady = true;
+    document.getElementById('preview-url').textContent = '🔀 ' + url + ' (proxy)';
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('preview-badge').style.display = '';
+    toast('Loaded via proxy ✓ — capture ready', 's');
+  };
+}
+
+// ── Inject capture script (for same-origin pages) ─────────────────────────────
+function injectCapture(frame) {
+  try {
+    frame.contentWindow.eval(`
+if(!window.__QA_ACTIVE){
+window.__QA_ACTIVE=true;window.__QA_Q=[];
+function _loc(e){if(!e)return null;var t=e.dataset&&(e.dataset.testid||e.dataset.test||e.dataset.cy);if(t)return'[data-testid="'+t+'"]';if(e.id)return'#'+e.id;var a=e.getAttribute('aria-label');if(a)return'[aria-label="'+a+'"]';if(e.name)return'[name="'+e.name+'"]';var g=(e.tagName||'').toLowerCase(),x=(e.textContent||e.value||'').trim().slice(0,40);return x?(g+':has-text("'+x+'")'):g;}
+function _lbl(e){if(e.getAttribute('aria-label'))return e.getAttribute('aria-label');if(e.id){var l=document.querySelector('label[for="'+e.id+'"]');if(l)return l.textContent.trim();}return e.placeholder||null;}
+function _push(o){o.ts=Date.now();window.__QA_Q.push(o);}
+document.addEventListener('click',function(e){var el=e.target.closest('button,a,[role="button"],input[type="checkbox"],input[type="radio"]');if(!el)return;if(el.type==='checkbox')_push({type:'check',locator:_loc(el),checked:el.checked,label:_lbl(el)});else if(el.type==='radio')_push({type:'radio',locator:_loc(el),value:el.value,label:_lbl(el)});else _push({type:'click',locator:_loc(el),text:(el.textContent||el.value||'').trim().slice(0,60),tag:(el.tagName||'').toLowerCase()});},true);
+document.addEventListener('blur',function(e){var el=e.target;if(!el||!['INPUT','TEXTAREA'].includes(el.tagName))return;if(['checkbox','radio','submit','button'].includes(el.type))return;if(!el.value)return;var last=window.__QA_Q[window.__QA_Q.length-1];if(last&&last.type==='fill'&&last.locator===_loc(el)&&last.value===el.value)return;_push({type:'fill',locator:_loc(el),value:el.value,inputType:el.type||'text',label:_lbl(el)});},true);
+document.addEventListener('change',function(e){var el=e.target;if(!el||el.tagName!=='SELECT')return;var o=el.options[el.selectedIndex];_push({type:'select',locator:_loc(el),value:el.value,optionText:o?o.text:el.value,label:_lbl(el)});},true);
+document.addEventListener('submit',function(e){_push({type:'submit',locator:_loc(e.target)});},true);
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&!['BUTTON','A'].includes(e.target.tagName))_push({type:'press',key:'Enter',locator:_loc(e.target)});if(e.key==='Escape')_push({type:'press',key:'Escape'});},true);
+}
+`);
+    S.frameReady = true;
+    document.getElementById('preview-url').textContent = document.getElementById('url-input').value;
+    document.getElementById('preview-badge').style.display = '';
+    document.getElementById('start-btn').disabled = false;
+    toast('Page loaded — capture ready ✓', 's');
+  } catch(e) {
+    // Cross-origin — will be handled by tryLoadDirect
+  }
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+function startRecording() {
+  if (!S.frameReady) { toast('Load a page first', 'e'); return; }
+  S.recording = true;
+  S.actions = [{ type:'navigate', url: document.getElementById('url-input').value, sessionTime:0, ts:Date.now(), id:'a0' }];
+  setRecUI(true);
+  renderActions();
+  S.pollTimer = setInterval(drainIframe, 350);
+  toast('Recording — interact with the page', 's');
+}
+
+function stopRecording() {
+  clearInterval(S.pollTimer); S.pollTimer = null;
+  drainIframe();
+  S.recording = false;
+  setRecUI(false);
+  document.getElementById('gen-btn').disabled = S.actions.length < 2;
+  buildSteps();
+  toast(`Stopped · ${S.actions.length} actions captured`, 's');
+}
+
+function setRecUI(on) {
+  document.getElementById('rec-dot').classList.toggle('on', on);
+  document.getElementById('rec-border').classList.toggle('on', on);
+  document.getElementById('hdr-status').textContent = on ? '● REC' : 'done';
+  document.getElementById('hdr-status').style.color = on ? 'var(--red)' : 'var(--text-3)';
+  document.getElementById('start-btn').disabled = on;
+  document.getElementById('stop-btn').disabled  = !on;
+}
+
+// ── Drain iframe queue ────────────────────────────────────────────────────────
+function drainIframe() {
+  try {
+    const win = document.getElementById('preview-frame').contentWindow;
+    if (!win || !win.__QA_Q) return;
+    const raw = win.__QA_Q.splice(0);
+    if (!raw.length) return;
+    const t0 = S.actions[0]?.ts || Date.now();
+    let changed = false;
+    for (let i = 0; i < raw.length; i++) {
+      const a = raw[i], nx = raw[i+1];
+      if (a.type==='fill' && nx && nx.type==='fill' && a.locator===nx.locator) continue;
+      S.actions.push({ ...a, id:'a'+(S.actions.length+1), sessionTime: a.ts - t0 });
+      changed = true;
+    }
+    if (changed) { renderActions(); document.getElementById('act-count').textContent = S.actions.length; document.getElementById('b-actions').textContent = S.actions.length; }
+  } catch(e) { clearInterval(S.pollTimer); }
+}
+
+// ── Build steps ───────────────────────────────────────────────────────────────
+function buildSteps() {
+  S.steps = S.actions.map((a,i) => ({ num:i+1, text: stepText(a) })).filter(s=>s.text);
+  renderSteps();
+  document.getElementById('b-steps').textContent = S.steps.length;
+}
+
+// ── Generate everything ───────────────────────────────────────────────────────
+async function generateAll() {
+  if (!S.actions.length) { toast('No actions to generate from','e'); return; }
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true; btn.textContent = '…';
+
+  try {
+    // Generate code for ALL 4 frameworks in parallel
+    document.getElementById('code-body').innerHTML = '<div class="code-spin">Generating code…</div>';
+    switchPanel('code', document.querySelector('.ptab[data-p="code"]'));
+
+    const fws = ['playwright-python','playwright-typescript','selenium-python','selenium-java'];
+    const results = await Promise.all(fws.map(f =>
+      fetch(`${API}/api/record/offline/convert`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ framework:f, className: guessClass(), actions: S.actions })
+      }).then(r=>r.json()).catch(()=>({success:false}))
+    ));
+
+    fws.forEach((f,i) => {
+      if (results[i]?.success) S.codeCache[f] = results[i].code || '';
+      if (results[i]?.steps && f === S.fw) { S.steps = results[i].steps; renderSteps(); document.getElementById('b-steps').textContent = S.steps.length; }
+    });
+
+    renderCode();
+    syncRecorderButtons();
+    toast('Generated all 4 frameworks ✓', 's');
+  } catch(e) {
+    toast('Error: ' + e.message, 'e');
+  } finally {
+    btn.disabled = false; btn.textContent = '→ Generate';
+  }
+}
+
+// ── Framework switcher (instant — uses cache) ─────────────────────────────────
+function switchFw(el) {
+  S.fw = el.dataset.fw;
+  activateFwBtn(S.fw);
+  renderCode();
+}
+
+function activateFwBtn(fw) {
+  document.querySelectorAll('.fw-btn').forEach(b => b.classList.toggle('active', b.dataset.fw === fw));
+}
+
+function renderCode() {
+  const src = S.codeCache[S.fw];
+  const ext = S.fw.includes('typescript') ? 'ts' : S.fw.includes('java') ? 'java' : 'py';
+  const fn  = guessClass().toLowerCase().replace('page','_page') + '.' + ext;
+  document.getElementById('code-fn').textContent = fn;
+  document.getElementById('code-body').innerHTML = src
+    ? `<pre class="code-pre">${esc(src)}</pre>`
+    : `<pre class="code-pre" style="color:var(--text-3);font-style:italic">Click Generate first.</pre>`;
+}
+
+async function copyCode() {
+  const pre = document.querySelector('#code-body pre');
+  if (!pre) return;
+  await navigator.clipboard.writeText(pre.textContent).catch(()=>{});
+  const btn = document.querySelector('.copybtn');
+  btn.textContent='Copied!'; btn.style.color='var(--green)';
+  setTimeout(()=>{btn.textContent='Copy';btn.style.color='';},1500);
+}
+
+// ── Test case panel ───────────────────────────────────────────────────────────
+function initTestCaseWorkspace() {
+  syncTestCaseWorkspaceControls();
+  renderTestCaseWorkspace();
+}
+
+function toggleScenarioType(type, el) {
+  const active = new Set(S.activeScenarioTypes);
+  if (active.has(type)) active.delete(type);
+  else active.add(type);
+  if (!active.size) active.add('positive');
+  if (type === 'all_possible' && active.has('all_possible')) {
+    active.clear();
+    active.add('all_possible');
+  } else if (type !== 'all_possible') {
+    active.delete('all_possible');
+  }
+  S.activeScenarioTypes = Array.from(active);
+  syncTestCaseWorkspaceControls();
+}
+
+function toggleSuiteType(type, el) {
+  const active = new Set(S.activeSuiteTypes);
+  if (active.has(type)) active.delete(type);
+  else active.add(type);
+  if (!active.size) active.add('page');
+  S.activeSuiteTypes = Array.from(active);
+  syncTestCaseWorkspaceControls();
+}
+
+function setCaseListFilter(filter, el) {
+  S.caseListFilter = filter || 'all';
+  syncTestCaseWorkspaceControls();
+  renderTestCaseWorkspace();
+}
+
+function syncTestCaseWorkspaceControls() {
+  document.querySelectorAll('.tc-chip[data-scenario]').forEach((chip) => {
+    chip.classList.toggle('active', S.activeScenarioTypes.includes(chip.dataset.scenario));
+  });
+  document.querySelectorAll('.tc-chip[data-suite]').forEach((chip) => {
+    chip.classList.toggle('active', S.activeSuiteTypes.includes(chip.dataset.suite));
+  });
+  document.querySelectorAll('.tc-chip[data-list-filter]').forEach((chip) => {
+    chip.classList.toggle('active', chip.dataset.listFilter === S.caseListFilter);
+  });
+}
+
+function syncRecorderButtons() {
+  const hasCode = Object.values(S.codeCache).some(Boolean);
+  const hasCases = S.testCases.length > 0;
+  document.getElementById('dl-btn').disabled = !(hasCode || hasCases);
+  document.getElementById('save-btn').disabled = !(hasCode || hasCases);
+  document.getElementById('tc-copy-selected-btn').disabled = S.selectedCaseIds.length === 0;
+}
+
+function getNormalizedSelectedTypes(forceAll) {
+  if (forceAll || S.activeScenarioTypes.includes('all_possible')) {
+    return ['positive','negative','boundary','navigation','ui','accessibility','all_possible'];
+  }
+  return S.activeScenarioTypes.length ? [...S.activeScenarioTypes] : ['positive'];
+}
+
+function getNormalizedSelectedSuites() {
+  return S.activeSuiteTypes.length ? [...S.activeSuiteTypes] : ['page'];
+}
+
+async function generateScenarioTestCases(appendAll) {
+  const pageContext = extractPageContextFromIframe();
+  const scenarioTypes = getNormalizedSelectedTypes(appendAll);
+  const suiteTypes = getNormalizedSelectedSuites();
+  if (!pageContext && !S.actions.length) {
+    toast('Load a page or record a flow first', 'e');
+    return;
+  }
+
+  const list = document.getElementById('tc-case-list');
+  const empty = document.getElementById('tc-case-empty');
+  empty.style.display = 'none';
+  list.innerHTML = '<div class="tc-generating">Generating QA test cases…</div>';
+  document.getElementById('tc-generation-status').textContent = appendAll
+    ? `Adding all possible ${suiteTypes.join(', ')} scenarios based on the current page and flow…`
+    : `Generating ${suiteTypes.join(', ')} test cases for ${scenarioTypes.join(', ')} coverage…`;
+
+  try {
+    const res = await fetch(`${API}/api/record/offline/testcases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pageContext,
+        actions: S.actions,
+        steps: S.steps,
+        scenarioTypes,
+        suiteTypes,
+        sourceMode: 'hybrid',
+        apiKey: S.apiKey || '',
+        provider: S.provider || 'claude',
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to generate test cases');
+
+    const incoming = dedupeTestCases((data.testCases || []).map(normalizeTestCaseShape));
+    const manualCases = S.testCases.filter(tc => tc.source === 'manual');
+    const preservedGenerated = appendAll ? S.testCases.filter(tc => tc.source !== 'manual') : [];
+    const mergedBase = appendAll ? [...manualCases, ...preservedGenerated] : [...manualCases];
+    const merged = mergeTestCases(mergedBase, incoming);
+    const preservedSelected = new Set(manualCases.filter(tc => S.selectedCaseIds.includes(tc.id)).map(tc => tc.id));
+    S.testCases = merged;
+    S.selectedCaseIds = Array.from(new Set([...preservedSelected, ...incoming.map(tc => tc.id)]));
+    S.expandedCaseIds = incoming.length ? [incoming[0].id] : S.expandedCaseIds;
+    S.editingCaseId = null;
+    document.getElementById('tc-generation-status').textContent = `${incoming.length} scenarios ready. Review, edit, copy, or add more.`;
+    renderTestCaseWorkspace();
+    toast(`${incoming.length} test cases generated`, 's');
+  } catch (err) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    document.getElementById('tc-generation-status').textContent = 'Generation failed. Adjust the scenario types and try again.';
+    toast(err.message, 'e');
+  }
+}
+
+function extractPageContextFromIframe() {
+  try {
+    const doc = document.getElementById('preview-frame').contentDocument;
+    if (!doc) return null;
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== 'none' && style.visibility !== 'hidden' && (el.offsetWidth > 0 || el.offsetHeight > 0);
+    };
+    const text = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+    const locator = (el) => {
+      if (!el) return '';
+      const tid = el.dataset && (el.dataset.testid || el.dataset.test || el.dataset.cy || el.dataset.qa);
+      if (tid) return `[data-testid="${tid}"]`;
+      if (el.id) return `#${el.id}`;
+      if (el.name) return `[name="${el.name}"]`;
+      if (el.getAttribute('aria-label')) return `[aria-label="${el.getAttribute('aria-label')}"]`;
+      return el.tagName ? el.tagName.toLowerCase() : '';
+    };
+    const forms = Array.from(doc.querySelectorAll('form')).slice(0, 8).map((form) => ({
+      locator: locator(form),
+      fields: Array.from(form.querySelectorAll('input, select, textarea')).filter(isVisible).slice(0, 12).map((field) => ({
+        label: field.getAttribute('aria-label') || field.placeholder || field.name || field.id || field.type || field.tagName.toLowerCase(),
+        type: field.type || field.tagName.toLowerCase(),
+        required: !!field.required,
+        placeholder: field.placeholder || '',
+        locator: locator(field),
+      })),
+      buttons: Array.from(form.querySelectorAll('button, input[type="submit"]')).filter(isVisible).slice(0, 6).map((btn) => ({
+        text: text(btn) || btn.value || btn.name || 'Submit',
+        locator: locator(btn),
+      })),
+    }));
+    return {
+      url: doc.location?.href || document.getElementById('url-input').value || '',
+      title: doc.title || '',
+      headings: Array.from(doc.querySelectorAll('h1,h2,h3')).filter(isVisible).slice(0, 8).map(text).filter(Boolean),
+      forms,
+      inputs: Array.from(doc.querySelectorAll('input, select, textarea')).filter(isVisible).slice(0, 20).map((field) => ({
+        label: field.getAttribute('aria-label') || field.placeholder || field.name || field.id || field.type || field.tagName.toLowerCase(),
+        type: field.type || field.tagName.toLowerCase(),
+        required: !!field.required,
+        placeholder: field.placeholder || '',
+        locator: locator(field),
+      })),
+      buttons: Array.from(doc.querySelectorAll('button, [role="button"], input[type="submit"]')).filter(isVisible).slice(0, 20).map((btn) => ({
+        text: text(btn) || btn.value || btn.name || 'Action',
+        locator: locator(btn),
+      })),
+      links: Array.from(doc.querySelectorAll('a[href]')).filter(isVisible).slice(0, 20).map((link) => ({
+        text: text(link) || link.href,
+        href: link.getAttribute('href') || '',
+        locator: locator(link),
+      })),
+      tables: Array.from(doc.querySelectorAll('table')).slice(0, 5).map((table) => ({
+        locator: locator(table),
+        headers: Array.from(table.querySelectorAll('th')).slice(0, 8).map(text).filter(Boolean),
+      })),
+      alerts: Array.from(doc.querySelectorAll('[role="alert"], .error, .alert, .toast')).filter(isVisible).slice(0, 8).map((el) => ({
+        text: text(el),
+        locator: locator(el),
+      })).filter(item => item.text),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function normalizeTestCaseShape(tc, index) {
+  const expected = (tc.expectedResult || tc.expected_result || '').trim();
+  const steps = Array.isArray(tc.steps) ? tc.steps.map(s => String(s).trim()).filter(Boolean) : [];
+  const title = ensureVerifyTitle(tc.title || '', expected || 'the expected result is displayed');
+  return {
+    id: String(tc.id || `TC${String(index + 1).padStart(3, '0')}`),
+    title,
+    category: (tc.category || 'functional').toLowerCase(),
+    priority: (tc.priority || 'medium').toLowerCase(),
+    preconditions: String(tc.preconditions || '').trim(),
+    steps,
+    expectedResult: expected,
+    locators: tc.locators && typeof tc.locators === 'object' ? tc.locators : {},
+    testData: tc.testData && typeof tc.testData === 'object' ? tc.testData : {},
+    tags: Array.isArray(tc.tags) ? tc.tags : [],
+    suite: inferTestCaseSuite(tc),
+    source: tc.source || 'hybrid',
+  };
+}
+
+function inferTestCaseSuite(tc) {
+  const explicit = String(tc.suite || '').toLowerCase().trim();
+  if (explicit) return explicit;
+  const tags = Array.isArray(tc.tags) ? tc.tags.map(tag => String(tag).toLowerCase()) : [];
+  if (tags.includes('regression')) return 'regression';
+  if (tags.includes('smoke')) return 'smoke';
+  if (String(tc.category || '').toLowerCase() === 'e2e' || tags.includes('e2e') || tags.includes('flow')) return 'e2e';
+  return 'page';
+}
+
+function ensureVerifyTitle(title, expected) {
+  const cleaned = String(title || '').replace(/\s+/g, ' ').trim();
+  if (cleaned && /^verify\b/i.test(cleaned)) return cleaned.endsWith('.') ? cleaned : `${cleaned}.`;
+  const expectation = String(expected || 'the expected result is shown').replace(/\s+/g, ' ').trim();
+  const subject = cleaned || 'the selected scenario behaves correctly';
+  const sentence = `Verify ${subject.replace(/^verify\s+/i, '')} and expect ${expectation.replace(/\.$/, '')}.`;
+  return sentence.replace(/\s+/g, ' ').trim();
+}
+
+function dedupeTestCases(cases) {
+  const seen = new Set();
+  return cases.filter((tc) => {
+    const key = tc.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergeTestCases(baseCases, incoming) {
+  const seen = new Set(baseCases.map(tc => tc.title.toLowerCase().trim()));
+  const result = [...baseCases];
+  incoming.forEach((tc) => {
+    const key = tc.title.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(tc);
+    }
+  });
+  return result;
+}
+
+function addManualTestCase() {
+  const manual = normalizeTestCaseShape({
+    id: nextTestCaseId(),
+    title: 'Verify the manually added scenario and expect the intended result.',
+    category: 'functional',
+    priority: 'medium',
+    preconditions: '',
+    steps: ['Document the QA action to perform'],
+    expectedResult: 'The intended result is displayed.',
+    locators: {},
+    testData: {},
+    tags: ['manual'],
+    suite: 'page',
+    source: 'manual',
+  }, S.testCases.length);
+  S.testCases.unshift(manual);
+  S.selectedCaseIds = Array.from(new Set([manual.id, ...S.selectedCaseIds]));
+  S.expandedCaseIds = [manual.id];
+  S.editingCaseId = manual.id;
+  document.getElementById('tc-generation-status').textContent = 'Manual test case added. Update the details and save it inline.';
+  renderTestCaseWorkspace();
+}
+
+function nextTestCaseId() {
+  const max = S.testCases.reduce((acc, tc) => {
+    const match = String(tc.id || '').match(/(\d+)$/);
+    return Math.max(acc, match ? parseInt(match[1], 10) : 0);
+  }, 0);
+  return `TC${String(max + 1).padStart(3, '0')}`;
+}
+
+function renderTestCaseWorkspace() {
+  const list = document.getElementById('tc-case-list');
+  const empty = document.getElementById('tc-case-empty');
+  const validIds = new Set(S.testCases.map(tc => tc.id));
+  S.selectedCaseIds = S.selectedCaseIds.filter(id => validIds.has(id));
+  S.expandedCaseIds = S.expandedCaseIds.filter(id => validIds.has(id));
+  if (S.editingCaseId && !validIds.has(S.editingCaseId)) S.editingCaseId = null;
+  document.getElementById('tc-summary-label').textContent = `${S.testCases.length} test cases`;
+  document.getElementById('tc-selection-label').textContent = `${S.selectedCaseIds.length} selected`;
+  syncRecorderButtons();
+  syncTestCaseWorkspaceControls();
+
+  const visibleCases = S.testCases.filter((tc) => {
+    if (S.caseListFilter === 'selected') return S.selectedCaseIds.includes(tc.id);
+    if (S.caseListFilter === 'all') return true;
+    return (tc.suite || 'page') === S.caseListFilter;
+  });
+
+  if (!visibleCases.length) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    empty.textContent = S.testCases.length
+      ? 'No test cases match the current list filter.'
+      : 'Capture a flow or load a page, then generate QA test cases from the selected scenario types.';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = visibleCases.map((tc) => renderTestCaseCard(tc)).join('');
+}
+
+function renderTestCaseCard(tc) {
+  const expanded = S.expandedCaseIds.includes(tc.id);
+  const editing = S.editingCaseId === tc.id;
+  const selected = S.selectedCaseIds.includes(tc.id);
+  const fullText = buildDetailedTestCaseText(tc);
+  return `
+    <div class="tc-card ${expanded ? 'expanded' : ''}">
+      <div class="tc-card-top">
+        <button class="tc-select ${selected ? 'selected' : ''}" onclick="toggleTestCaseSelection('${escAttr(tc.id)}')">${selected ? '✓' : ''}</button>
+        <div class="tc-main" onclick="toggleTestCaseExpanded('${escAttr(tc.id)}')">
+          <div class="tc-title-line">${esc(tc.title)}</div>
+          <div class="tc-meta">
+            <span class="badge badge-${escAttr(tc.priority || 'medium')}">${esc(tc.priority)}</span>
+            <span class="badge badge-cat">${esc(tc.category)}</span>
+            <span class="badge badge-source">${esc(tc.suite || 'page')}</span>
+            <span class="badge badge-source">${esc(tc.source || 'hybrid')}</span>
+          </div>
+        </div>
+        <div class="tc-actions">
+          <button class="tc-icon-btn" onclick="copyTestCaseTitle('${escAttr(tc.id)}')">Copy</button>
+          <button class="tc-icon-btn" onclick="startEditTestCase('${escAttr(tc.id)}')">${editing ? 'Editing' : 'Edit'}</button>
+          <button class="tc-icon-btn danger" onclick="deleteTestCase('${escAttr(tc.id)}')">Delete</button>
+        </div>
+      </div>
+      ${expanded ? `
+        <div class="tc-card-body">
+          ${editing ? renderTestCaseEditor(tc) : `
+            <div class="tc-field"><div class="tc-label">ID</div><div class="tc-val mono">${esc(tc.id)}</div></div>
+            <div class="tc-field"><div class="tc-label">Suite</div><div class="tc-val">${esc(tc.suite || 'page')}</div></div>
+            <div class="tc-field"><div class="tc-label">Preconditions</div><div class="tc-val">${esc(tc.preconditions || 'None')}</div></div>
+            <div class="tc-field"><div class="tc-label">Expected Result</div><div class="tc-val">${esc(tc.expectedResult || 'Not specified')}</div></div>
+            <div class="tc-field">
+              <div class="tc-label">Steps</div>
+              <div class="tc-step-list">${(tc.steps || []).map((step, idx) => `<div class="tc-step-row"><span class="tc-step-num">${idx + 1}.</span><span>${esc(step)}</span></div>`).join('')}</div>
+            </div>
+            <div class="tc-field"><div class="tc-label">Locators</div><div class="tc-val mono">${esc(formatKeyValueBlock(tc.locators) || 'None')}</div></div>
+            <div class="tc-field"><div class="tc-label">Test Data</div><div class="tc-val mono">${esc(formatKeyValueBlock(tc.testData) || 'None')}</div></div>
+            <div class="tc-body-actions">
+              <button class="tc-icon-btn" onclick="copyDetailedTestCase('${escAttr(tc.id)}')">Copy Full</button>
+            </div>
+          `}
+        </div>
+      ` : ''}
+      <div style="display:none" data-copy-detail="${escAttr(tc.id)}">${esc(fullText)}</div>
+    </div>
+  `;
+}
+
+function renderTestCaseEditor(tc) {
+  return `
+    <div class="tc-edit-grid">
+      <div class="tc-field">
+        <div class="tc-label">Title</div>
+        <input class="tc-input" id="edit-title-${escAttr(tc.id)}" value="${escAttr(tc.title)}"/>
+      </div>
+      <div class="tc-edit-row">
+        <div class="tc-field">
+          <div class="tc-label">Priority</div>
+          <select class="tc-select-input" id="edit-priority-${escAttr(tc.id)}">
+            ${['high','medium','low'].map(opt => `<option value="${opt}" ${tc.priority === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div class="tc-field">
+          <div class="tc-label">Category</div>
+          <select class="tc-select-input" id="edit-category-${escAttr(tc.id)}">
+            ${['functional','negative','boundary','navigation','ui','accessibility','e2e'].map(opt => `<option value="${opt}" ${tc.category === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="tc-field">
+        <div class="tc-label">Suite</div>
+        <select class="tc-select-input" id="edit-suite-${escAttr(tc.id)}">
+          ${['page','e2e','regression','smoke'].map(opt => `<option value="${opt}" ${(tc.suite || 'page') === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+        </select>
+      </div>
+      <div class="tc-field">
+        <div class="tc-label">Preconditions</div>
+        <textarea class="tc-textarea" id="edit-preconditions-${escAttr(tc.id)}">${esc(tc.preconditions || '')}</textarea>
+      </div>
+      <div class="tc-field">
+        <div class="tc-label">Expected Result</div>
+        <textarea class="tc-textarea" id="edit-expected-${escAttr(tc.id)}">${esc(tc.expectedResult || '')}</textarea>
+      </div>
+      <div class="tc-field">
+        <div class="tc-label">Steps (one per line)</div>
+        <textarea class="tc-textarea" id="edit-steps-${escAttr(tc.id)}">${esc((tc.steps || []).join('\n'))}</textarea>
+      </div>
+      <div class="tc-body-actions">
+        <button class="tc-icon-btn" onclick="cancelEditTestCase()">Cancel</button>
+        <button class="tc-icon-btn" onclick="saveEditedTestCase('${escAttr(tc.id)}')">Save</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleTestCaseSelection(id) {
+  const selected = new Set(S.selectedCaseIds);
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  S.selectedCaseIds = Array.from(selected);
+  renderTestCaseWorkspace();
+}
+
+function toggleTestCaseExpanded(id) {
+  const expanded = new Set(S.expandedCaseIds);
+  if (expanded.has(id)) expanded.delete(id);
+  else expanded.add(id);
+  S.expandedCaseIds = Array.from(expanded);
+  renderTestCaseWorkspace();
+}
+
+function startEditTestCase(id) {
+  S.expandedCaseIds = Array.from(new Set([...S.expandedCaseIds, id]));
+  S.editingCaseId = id;
+  renderTestCaseWorkspace();
+}
+
+function cancelEditTestCase() {
+  S.editingCaseId = null;
+  renderTestCaseWorkspace();
+}
+
+function saveEditedTestCase(id) {
+  const tc = S.testCases.find(item => item.id === id);
+  if (!tc) return;
+  const expected = document.getElementById(`edit-expected-${id}`).value.trim();
+  const rawTitle = document.getElementById(`edit-title-${id}`).value.trim();
+  tc.title = ensureVerifyTitle(rawTitle, expected || 'the expected result is displayed');
+  tc.priority = document.getElementById(`edit-priority-${id}`).value;
+  tc.category = document.getElementById(`edit-category-${id}`).value;
+  tc.suite = document.getElementById(`edit-suite-${id}`).value;
+  tc.preconditions = document.getElementById(`edit-preconditions-${id}`).value.trim();
+  tc.expectedResult = expected;
+  tc.steps = document.getElementById(`edit-steps-${id}`).value.split('\n').map(s => s.trim()).filter(Boolean);
+  S.editingCaseId = null;
+  renderTestCaseWorkspace();
+}
+
+function deleteTestCase(id) {
+  S.testCases = S.testCases.filter(tc => tc.id !== id);
+  S.selectedCaseIds = S.selectedCaseIds.filter(caseId => caseId !== id);
+  S.expandedCaseIds = S.expandedCaseIds.filter(caseId => caseId !== id);
+  if (S.editingCaseId === id) S.editingCaseId = null;
+  renderTestCaseWorkspace();
+}
+
+function copyTestCaseTitle(id) {
+  const tc = S.testCases.find(item => item.id === id);
+  if (!tc) return;
+  navigator.clipboard.writeText(tc.title).then(() => toast('Test case copied', 's')).catch(() => {});
+}
+
+function copyDetailedTestCase(id) {
+  const tc = S.testCases.find(item => item.id === id);
+  if (!tc) return;
+  navigator.clipboard.writeText(buildDetailedTestCaseText(tc)).then(() => toast('Detailed test case copied', 's')).catch(() => {});
+}
+
+function copySelectedTestCases() {
+  const lines = S.testCases.filter(tc => S.selectedCaseIds.includes(tc.id)).map(tc => tc.title);
+  if (!lines.length) return;
+  navigator.clipboard.writeText(lines.join('\n')).then(() => toast('Selected test cases copied', 's')).catch(() => {});
+}
+
+function buildDetailedTestCaseText(tc) {
+  return [
+    tc.title,
+    '',
+    `ID: ${tc.id}`,
+    `Priority: ${tc.priority}`,
+    `Category: ${tc.category}`,
+    `Suite: ${tc.suite || 'page'}`,
+    `Source: ${tc.source || 'hybrid'}`,
+    `Preconditions: ${tc.preconditions || 'None'}`,
+    '',
+    'Steps:',
+    ...(tc.steps || []).map((step, idx) => `${idx + 1}. ${step}`),
+    '',
+    `Expected Result: ${tc.expectedResult || 'Not specified'}`,
+    '',
+    `Locators: ${formatKeyValueBlock(tc.locators) || 'None'}`,
+    `Test Data: ${formatKeyValueBlock(tc.testData) || 'None'}`,
+  ].join('\n');
+}
+
+function formatKeyValueBlock(obj) {
+  if (!obj || typeof obj !== 'object' || !Object.keys(obj).length) return '';
+  return Object.entries(obj).map(([key, value]) => `${key}: ${value}`).join('\n');
+}
+
+// ── Download ZIP ──────────────────────────────────────────────────────────────
+async function downloadZip() {
+  const zip = new JSZip();
+  const fws = { 'playwright-python':'py', 'playwright-typescript':'ts', 'selenium-python':'py', 'selenium-java':'java' };
+  let hasFiles = false;
+  Object.entries(S.codeCache).forEach(([f,src]) => {
+    if (!src) return;
+    const ext = fws[f];
+    const folder = f.includes('playwright') ? 'playwright' : 'selenium';
+    const lang = f.includes('typescript') ? 'ts' : f.includes('java') ? 'java' : 'py';
+    zip.file(`${folder}/${lang}/${guessClass().toLowerCase().replace('page','_page')}.${ext}`, src);
+    hasFiles = true;
+  });
+  if (!hasFiles && !S.testCases.length) { toast('Generate code or test cases first','e'); return; }
+
+  if (S.testCases.length) {
+    zip.file('test_cases.json', JSON.stringify(S.testCases, null, 2));
+    const selectedLines = S.testCases.filter(tc => S.selectedCaseIds.includes(tc.id)).map(tc => tc.title).join('\n');
+    zip.file('selected_test_cases.txt', selectedLines);
+  }
+  if (S.steps.length) zip.file('STEPS.md', '# Test Steps\n\n' + S.steps.map(s=>`${s.num}. ${s.text}`).join('\n'));
+
+  const blob = await zip.generateAsync({ type:'blob', compression:'DEFLATE' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`qa_recorded_${Date.now()}.zip`; a.click();
+  URL.revokeObjectURL(url);
+  toast('ZIP downloaded','s');
+}
+
+// ── Save to project ───────────────────────────────────────────────────────────
+async function saveToProject() {
+  const url = document.getElementById('url-input').value;
+  const project = {
+    name: url, url, pageType: guessPageType(url),
+    pages: [{ url, testCases: S.testCases, selectedTestCaseIds: S.selectedCaseIds, scripts: Object.fromEntries(
+      Object.entries(S.codeCache).filter(([,v])=>v).map(([k,v])=>[k,{filename:k+'.txt',content:v}])
+    )}]
+  };
+  try {
+    const r = await fetch(`${API}/api/save-project`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project})});
+    const d = await r.json();
+    if (d.success) { toast('Saved! Redirecting…','s'); setTimeout(()=>window.location='/',1400); }
+    else throw new Error(d.error);
+  } catch(e) { toast('Save failed: '+e.message,'e'); }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderActions() {
+  const list = document.getElementById('actions-list');
+  const empty = document.getElementById('empty-actions');
+  if (!S.actions.length) { empty.style.display='block'; list.innerHTML=''; return; }
+  empty.style.display='none';
+  list.innerHTML = S.actions.map((a,i)=>`
+    <div class="arow">
+      <span class="atype t-${a.type}">${a.type}</span>
+      <div class="abody">
+        <div class="amain">${esc(actionText(a))}</div>
+        ${(a.locator||a.url)?`<div class="aloc">${esc(a.locator||a.url)}</div>`:''}
+      </div>
+      <button class="adel" onclick="delAction(${i})">×</button>
+    </div>`).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+function renderSteps() {
+  const list = document.getElementById('steps-list');
+  const empty = document.getElementById('empty-steps');
+  if (!S.steps.length) { empty.style.display='block'; list.innerHTML=''; return; }
+  empty.style.display='none';
+  list.innerHTML = S.steps.map((s,i)=>`
+    <div class="srow">
+      <span class="snum">${s.num}.</span>
+      <div class="stxt" contenteditable="true" spellcheck="false"
+        onblur="S.steps[${i}].text=this.textContent.trim()"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">${esc(s.text)}</div>
+    </div>`).join('');
+}
+
+// ── Panel switching ───────────────────────────────────────────────────────────
+function switchPanel(name, el) {
+  document.querySelectorAll('.pbody').forEach(p => p.classList.remove('active'));
+  document.getElementById('pbody-'+name).classList.add('active');
+  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function delAction(i) { S.actions.splice(i,1); renderActions(); document.getElementById('act-count').textContent=S.actions.length; document.getElementById('b-actions').textContent=S.actions.length; }
+
+function clearAll() {
+  clearInterval(S.pollTimer); S.pollTimer=null; S.recording=false;
+  S.actions=[]; S.steps=[]; S.codeCache={'playwright-python':'','playwright-typescript':'','selenium-python':'','selenium-java':''};
+  S.testCases=[]; S.selectedCaseIds=[]; S.activeSuiteTypes=['page']; S.activeScenarioTypes=['positive']; S.caseListFilter='all'; S.expandedCaseIds=[]; S.editingCaseId=null;
+  setRecUI(false);
+  document.getElementById('start-btn').disabled=true;
+  ['gen-btn','dl-btn','save-btn'].forEach(id=>document.getElementById(id).disabled=true);
+  document.getElementById('act-count').textContent='0';
+  ['b-actions','b-steps'].forEach(id=>document.getElementById(id).textContent='0');
+  renderActions(); renderSteps(); renderCode(); renderTestCaseWorkspace();
+  syncTestCaseWorkspaceControls();
+  document.getElementById('tc-generation-status').textContent = 'Choose scenario types and generate QA-ready test cases from the page or recorded flow.';
+  document.getElementById('preview-frame').style.display='none';
+  document.getElementById('start-screen').style.display='flex';
+  document.getElementById('preview-badge').style.display='none';
+  S.frameReady=false;
+}
+
+function actionText(a) {
+  if(a.type==='navigate') return a.url;
+  if(a.type==='click')    return 'Click "'+(a.text||a.locator)+'"';
+  if(a.type==='fill')     return 'Fill "'+a.value+'" → '+(a.label||a.locator);
+  if(a.type==='select')   return 'Select "'+(a.optionText||a.value)+'" in '+(a.label||a.locator);
+  if(a.type==='check')    return (a.checked?'Check':'Uncheck')+' "'+(a.label||a.locator)+'"';
+  if(a.type==='press')    return 'Press '+a.key;
+  if(a.type==='submit')   return 'Submit form';
+  return a.type;
+}
+
+function stepText(a) {
+  if(a.type==='navigate') return 'Navigate to '+a.url;
+  if(a.type==='click')    return 'Click '+(a.text?'"'+a.text+'"':a.locator);
+  if(a.type==='fill')     return 'Enter "'+(a.value||'')+'" in the '+(a.label||a.locator)+' field';
+  if(a.type==='select')   return 'Select "'+(a.optionText||a.value)+'" from '+(a.label||a.locator);
+  if(a.type==='check')    return (a.checked?'Check':'Uncheck')+' "'+(a.label||a.locator)+'"';
+  if(a.type==='press')    return 'Press '+a.key+' key';
+  if(a.type==='submit')   return 'Submit the form';
+  return null;
+}
+
+function guessClass() {
+  try{ const p=new URL(document.getElementById('url-input').value||'http://x/page').pathname.split('/').filter(Boolean); const l=p[p.length-1]||'page'; return l.charAt(0).toUpperCase()+l.slice(1).replace(/[-_](.)/g,(_,c)=>c.toUpperCase())+'Page'; }catch{return 'RecordedPage';}
+}
+
+function guessPageType(url) {
+  const u=(url||'').toLowerCase();
+  return /login|signin/.test(u)?'login':/register|signup/.test(u)?'registration':/checkout/.test(u)?'checkout':'page';
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
+}
+
+function toast(msg, type='i') {
+  const c=document.getElementById('toasts'),el=document.createElement('div');
+  el.className='toast t'+type; el.textContent=msg; c.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300);},3000);
+}
+
+document.getElementById('url-input').addEventListener('keydown',e=>{if(e.key==='Enter')loadPage();});
+</script>
+</body>
+</html>
