@@ -1046,6 +1046,7 @@ Requirements:
 - Generate both journey-level and step-level test cases
 - Use scope="journey" for end-to-end cases and scope="step" for local step cases
 - For step cases, include the correct stepId and stepOrder from the provided steps
+- Each step's \`assertions\` array lists the expected outcomes after that step; cover every listed assertion in that step's cases and anchor expectedResult text on them
 - Cover realistic enterprise-style flows and negative scenarios
 
 Respond ONLY with valid JSON:
@@ -1089,6 +1090,11 @@ Requirements:
 - Shared base/config/test-data files are injected separately, do not generate them
 - ${summary.journeyExecutable ? "Add one end-to-end journey file" : "Do not generate a journey file because recorded transitions are missing"}
 - Add separate step test files for the provided steps
+- Implement every assertion in each step's \`assertions\` array after that step executes:
+  - url-contains: assert the value is a substring of the current URL
+  - title-contains: assert the value is a substring of the page title
+  - element-visible: wait for visibility of the element using the value as the locator
+  - custom: implement a best-effort assertion from the description in the value
 - Preserve step order
 
 Respond ONLY with valid JSON:
@@ -1119,6 +1125,14 @@ function slimJourneySteps(journey) {
     source: step.source,
     transitionStatus: step.transitionStatus,
     notes: step.notes || "",
+    assertions: (step.assertions || [])
+      .filter((assertion) => assertion && assertion.enabled !== false && String(assertion.value || "").trim())
+      .slice(0, 8)
+      .map((assertion) => ({
+        type: ["url-contains", "title-contains", "element-visible", "custom"].includes(assertion.type) ? assertion.type : "custom",
+        value: String(assertion.value).trim(),
+        label: assertion.label || String(assertion.value).trim(),
+      })),
     keyForms: (step.pageData?.forms || []).slice(0, 2).map((form) => ({
       purpose: form.purpose,
       fields: (form.fields || []).slice(0, 5).map((field) => ({

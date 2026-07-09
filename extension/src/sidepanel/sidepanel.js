@@ -2681,7 +2681,7 @@ function hydrateJourney(journey) {
 function normalizeJourneyStep(step, index) {
   const order = index + 1;
   const path = step.path || safeUrlPath(step.url);
-  return {
+  const normalized = {
     id: step.id || crypto.randomUUID(),
     order,
     title: step.title || buildJourneyStepTitle(step.url, order),
@@ -2696,6 +2696,57 @@ function normalizeJourneyStep(step, index) {
     notes: step.notes || "",
     transitionStatus: order === 1 ? "start" : (step.transitionStatus || "missing"),
   };
+  normalized.assertions = normalizeStepAssertions(step, normalized);
+  return normalized;
+}
+
+const STEP_ASSERTION_TYPES = ["url-contains", "title-contains", "element-visible", "custom"];
+
+function normalizeStepAssertions(rawStep, step) {
+  if (Array.isArray(rawStep.assertions) && rawStep.assertions.length) {
+    return rawStep.assertions
+      .filter((assertion) => assertion && String(assertion.value || "").trim())
+      .map((assertion) => ({
+        id: assertion.id || crypto.randomUUID(),
+        type: STEP_ASSERTION_TYPES.includes(assertion.type) ? assertion.type : "custom",
+        value: String(assertion.value).trim(),
+        label: assertion.label || String(assertion.value).trim(),
+        enabled: assertion.enabled !== false,
+        source: assertion.source === "user" ? "user" : "derived",
+      }));
+  }
+  return deriveStepAssertions(step);
+}
+
+function deriveStepAssertions(step) {
+  const assertions = [];
+  const push = (type, value, label) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return;
+    assertions.push({ id: crypto.randomUUID(), type, value: trimmed, label, enabled: true, source: "derived" });
+  };
+
+  if (step.path && step.path !== "/") {
+    push("url-contains", step.path, `URL contains "${step.path}"`);
+  }
+
+  const title = step.pageData?.meta?.title;
+  if (title) {
+    const short = String(title).trim().slice(0, 60);
+    push("title-contains", short, `Page title contains "${short}"`);
+  }
+
+  const form = (step.pageData?.forms || []).find((entry) => entry?.locator);
+  if (form) {
+    push("element-visible", form.locator, `${form.purpose || "Main form"} is visible`);
+  } else {
+    const button = (step.pageData?.buttons || []).find((entry) => entry?.locator && entry?.text);
+    if (button) {
+      push("element-visible", button.locator, `"${button.text}" button is visible`);
+    }
+  }
+
+  return assertions;
 }
 
 function buildJourneyStepTitle(url, order) {
@@ -2795,6 +2846,56 @@ function renderJourneyTab() {
       queueJourneyDraftSave();
     });
   });
+  list.querySelectorAll(".journey-assertion-toggle").forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const idx = Number(event.target.dataset.index);
+      const assertion = (state.journey.steps[idx]?.assertions || []).find((entry) => entry.id === event.target.dataset.aid);
+      if (!assertion) return;
+      assertion.enabled = event.target.checked;
+      queueJourneyDraftSave();
+      renderJourneyTab();
+    });
+  });
+  list.querySelectorAll(".journey-assertion-delete").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const idx = Number(event.currentTarget.dataset.index);
+      const step = state.journey.steps[idx];
+      if (!step) return;
+      step.assertions = (step.assertions || []).filter((entry) => entry.id !== event.currentTarget.dataset.aid);
+      queueJourneyDraftSave();
+      renderJourneyTab();
+    });
+  });
+  const addCustomAssertion = (idx, input) => {
+    const value = String(input?.value || "").trim();
+    const step = state.journey.steps[idx];
+    if (!value || !step) return;
+    step.assertions = step.assertions || [];
+    step.assertions.push({
+      id: crypto.randomUUID(),
+      type: "custom",
+      value,
+      label: value,
+      enabled: true,
+      source: "user",
+    });
+    queueJourneyDraftSave();
+    renderJourneyTab();
+  };
+  list.querySelectorAll(".journey-assertion-add-btn").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const idx = Number(event.currentTarget.dataset.index);
+      const input = list.querySelector(`.journey-assertion-input[data-index="${idx}"]`);
+      addCustomAssertion(idx, input);
+    });
+  });
+  list.querySelectorAll(".journey-assertion-input").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      addCustomAssertion(Number(event.target.dataset.index), event.target);
+    });
+  });
 }
 
 function buildJourneyStepCard(step, index) {
@@ -2829,6 +2930,23 @@ function buildJourneyStepCard(step, index) {
       </div>
       ${expanded ? `
         <div class="journey-step-details">
+          <div class="journey-step-label">Expected after this step</div>
+          <div class="journey-assertion-list">
+            ${(step.assertions || []).length
+              ? (step.assertions || []).map((assertion) => `
+                <div class="journey-assertion-item">
+                  <label class="journey-assertion-main">
+                    <input type="checkbox" class="journey-assertion-toggle" data-index="${index}" data-aid="${assertion.id}" ${assertion.enabled ? "checked" : ""}/>
+                    <span class="journey-assertion-text${assertion.enabled ? "" : " disabled"}">${escapeHtml(assertion.label || assertion.value)}</span>
+                  </label>
+                  ${assertion.source === "user" ? `<button class="journey-step-btn journey-assertion-delete" data-index="${index}" data-aid="${assertion.id}" title="Remove assertion">✕</button>` : ""}
+                </div>`).join("")
+              : `<div class="journey-empty-inline">No assertions derived — scan this page or add one below.</div>`}
+          </div>
+          <div class="journey-assertion-add">
+            <input type="text" class="journey-assertion-input" data-index="${index}" placeholder="Add expected outcome (e.g. success toast appears)"/>
+            <button class="journey-step-btn journey-assertion-add-btn" data-index="${index}" title="Add assertion">＋</button>
+          </div>
           <div class="journey-step-label">Notes</div>
           <textarea class="journey-step-notes" data-index="${index}" rows="2" placeholder="Add intent, expected business rules, or edge cases for this step">${step.notes || ""}</textarea>
           <div class="journey-step-label">Recorded flow</div>

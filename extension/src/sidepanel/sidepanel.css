@@ -1030,6 +1030,70 @@ body {
   background: var(--bg);
 }
 
+.journey-assertion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.journey-assertion-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journey-assertion-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.journey-assertion-toggle {
+  accent-color: var(--green);
+  flex-shrink: 0;
+}
+
+.journey-assertion-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journey-assertion-text.disabled {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.journey-assertion-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.journey-assertion-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.journey-assertion-input:focus {
+  border-color: var(--green);
+}
+
 /* ── Mode toggle (Happy path / Exploratory) ──────────────────────── */
 
 .mode-row {

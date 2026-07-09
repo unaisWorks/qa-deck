@@ -5,6 +5,7 @@ const {
   buildJourneyGenerationSummary,
   buildJourneySharedFiles,
   normalizeJourneyScriptBundle,
+  slimJourneySteps,
 } = require("../server.js");
 
 const JOURNEY = {
@@ -84,4 +85,48 @@ test("normalize: drops journey-group files when transitions are missing", () => 
   );
   assert.ok(bundle.files.some((f) => f.group === "step"), "step files must be kept");
   assert.equal(bundle.summary.journeyExecutable, false);
+});
+
+test("slimJourneySteps forwards enabled assertions and drops disabled/blank ones", () => {
+  const journey = {
+    name: "Flow",
+    steps: [
+      {
+        id: "s1",
+        order: 1,
+        title: "Login",
+        url: "https://shop.example.com/login",
+        path: "/login",
+        transitionStatus: "recorded",
+        assertions: [
+          { id: "a1", type: "url-contains", value: "/login", label: "URL contains /login", enabled: true },
+          { id: "a2", type: "element-visible", value: "#form", label: "Form visible", enabled: false },
+          { id: "a3", type: "weird-type", value: "toast appears", enabled: true },
+          { id: "a4", type: "custom", value: "   ", enabled: true },
+        ],
+      },
+    ],
+  };
+
+  const [step] = slimJourneySteps(journey);
+  assert.equal(step.assertions.length, 2);
+  assert.deepEqual(step.assertions[0], { type: "url-contains", value: "/login", label: "URL contains /login" });
+  assert.equal(step.assertions[1].type, "custom", "unknown types coerce to custom");
+});
+
+test("slimJourneySteps caps assertions at 8 and tolerates steps without any", () => {
+  const journey = {
+    name: "Flow",
+    steps: [
+      {
+        id: "s1",
+        assertions: Array.from({ length: 12 }, (_, i) => ({ type: "custom", value: `assert ${i}`, enabled: true })),
+      },
+      { id: "s2" },
+    ],
+  };
+
+  const [first, second] = slimJourneySteps(journey);
+  assert.equal(first.assertions.length, 8);
+  assert.deepEqual(second.assertions, []);
 });

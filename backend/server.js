@@ -4069,6 +4069,7 @@ Requirements:
 - Generate both journey-level and step-level test cases
 - Journey-level cases must validate complete end-to-end outcomes across multiple pages
 - Step-level cases must validate the local page or recorded segment for that step
+- Each step's \`assertions\` array lists the expected outcomes after that step; cover every listed assertion in that step's cases and anchor expectedResult text on them
 - Use scope="journey" for end-to-end cases and scope="step" for step cases
 - For step cases, include the correct stepId and stepOrder from the provided steps
 - Keep output actionable for enterprise-style QA flows such as login, search, cart, checkout, approvals, refunds, or admin actions
@@ -4130,6 +4131,11 @@ Requirements:
 - ${summary.journeyExecutable ? "Add one end-to-end journey test file that stitches all recorded transitions in order" : "Do NOT add a journey group file because recorded transitions are missing; generate step-level files only"}
 - Preserve step order in generated tests
 - Use recorded transitions as the source of truth for executable navigation
+- Implement every assertion in each step's \`assertions\` array after that step executes:
+  - url-contains: assert the value is a substring of the current URL
+  - title-contains: assert the value is a substring of the page title
+  - element-visible: wait for visibility of the element using the value as the locator
+  - custom: implement a best-effort assertion from the description in the value
 - Keep filenames deterministic and implementation-ready
 - For selenium-python:
   - Use Selenium 4 APIs only, never use find_element_by_* or find_elements_by_*
@@ -4165,10 +4171,24 @@ function slimJourneySteps(journey) {
     source: step.source,
     transitionStatus: step.transitionStatus,
     notes: step.notes || "",
+    assertions: slimStepAssertions(step),
     keyForms: slimStepForms(step.pageData),
     keyButtons: slimStepButtons(step.pageData),
     recordedSteps: (step.recordedSteps || []).slice(0, 10),
   }));
+}
+
+function slimStepAssertions(step) {
+  return (step.assertions || [])
+    .filter((assertion) => assertion && assertion.enabled !== false && String(assertion.value || "").trim())
+    .slice(0, 8)
+    .map((assertion) => ({
+      type: ["url-contains", "title-contains", "element-visible", "custom"].includes(assertion.type)
+        ? assertion.type
+        : "custom",
+      value: String(assertion.value).trim(),
+      label: assertion.label || String(assertion.value).trim(),
+    }));
 }
 
 function slimStepForms(pageData) {
@@ -6290,6 +6310,7 @@ module.exports = {
   buildJourneyGenerationSummary,
   buildJourneySharedFiles,
   normalizeJourneyScriptBundle,
+  slimJourneySteps,
   readRunReport,
   QA_DECK_REPORTER_SOURCE,
 };
