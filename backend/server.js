@@ -2022,7 +2022,7 @@ function callAI(apiKey, prompt, maxTokens, system) {
 function callClaude(apiKey, { system, prompt, maxTokens = 3000 }) {
   return new Promise((resolve) => {
     const body = JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content: prompt }],
@@ -2065,7 +2065,7 @@ function callGemini(apiKey, prompt, system, maxTokens) {
       generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
     });
 
-    const path = `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const path = `/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
     const req = https.request({
       hostname: "generativelanguage.googleapis.com",
       path,
@@ -2090,7 +2090,7 @@ function callGemini(apiKey, prompt, system, maxTokens) {
   });
 }
 
-// ── OpenAI (GPT-4o-mini) ──────────────────────────────────────────────────────
+// ── OpenAI (GPT-5.4 mini) ─────────────────────────────────────────────────────
 function callOpenAI(apiKey, prompt, system, maxTokens) {
   return new Promise((resolve) => {
     const messages = [];
@@ -2098,10 +2098,9 @@ function callOpenAI(apiKey, prompt, system, maxTokens) {
     messages.push({ role: "user", content: prompt });
 
     const body = JSON.stringify({
-      model: "gpt-4o-mini",
-      max_tokens: maxTokens,
+      model: "gpt-5.4-mini",
+      max_completion_tokens: maxTokens,
       messages,
-      temperature: 0.3,
     });
 
     const req = https.request({
@@ -2141,7 +2140,7 @@ function callGrok(apiKey, prompt, system, maxTokens) {
     messages.push({ role: "user", content: prompt });
 
     const body = JSON.stringify({
-      model: "grok-beta",
+      model: "grok-4.5",
       max_tokens: maxTokens,
       messages,
       temperature: 0.3,
@@ -2182,7 +2181,7 @@ function callGroq(apiKey, prompt, system, maxTokens) {
     if (system) messages.push({ role: "system", content: system });
     messages.push({ role: "user", content: prompt });
 
-    const body = JSON.stringify({ model: "llama-3.3-70b-versatile", max_tokens: maxTokens, messages, temperature: 0.3 });
+    const body = JSON.stringify({ model: "openai/gpt-oss-120b", max_tokens: maxTokens, messages, temperature: 0.3 });
 
     const req = https.request({
       hostname: "api.groq.com",

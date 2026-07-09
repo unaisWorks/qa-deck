@@ -713,7 +713,7 @@ async function callClaudeAPI(apiKey, system, prompt, maxTokens) {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: maxTokens, system, messages: [{ role: "user", content: prompt }] }),
     });
     if (!res.ok) { const e = await res.json(); return { success: false, error: e.error?.message || `API error ${res.status}` }; }
     const d = await res.json();
@@ -729,7 +729,7 @@ async function callOpenAIAPI(apiKey, system, prompt, maxTokens) {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: maxTokens, messages, temperature: 0.3 }),
+      body: JSON.stringify({ model: "gpt-5.4-mini", max_completion_tokens: maxTokens, messages }),
     });
     if (!res.ok) { const e = await res.json(); return { success: false, error: e.error?.message || `API error ${res.status}` }; }
     const d = await res.json();
@@ -745,7 +745,7 @@ async function callGrokAPI(apiKey, system, prompt, maxTokens) {
     const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "grok-beta", max_tokens: maxTokens, messages, temperature: 0.3 }),
+      body: JSON.stringify({ model: "grok-4.5", max_tokens: maxTokens, messages, temperature: 0.3 }),
     });
     if (!res.ok) { const e = await res.json(); return { success: false, error: e.error?.message || `API error ${res.status}` }; }
     const d = await res.json();
@@ -756,7 +756,7 @@ async function callGrokAPI(apiKey, system, prompt, maxTokens) {
 async function callGeminiAPI(apiKey, system, prompt, maxTokens) {
   try {
     const fullPrompt = system ? `${system}\n\n${prompt}` : prompt;
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 } }),
@@ -775,7 +775,7 @@ async function callGroqAPI(apiKey, system, prompt, maxTokens) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "llama-3.3-70b-versatile", max_tokens: maxTokens, messages, temperature: 0.3 }),
+      body: JSON.stringify({ model: "openai/gpt-oss-120b", max_tokens: maxTokens, messages, temperature: 0.3 }),
     });
     if (!res.ok) { const e = await res.json(); return { success: false, error: e.error?.message || `API error ${res.status}` }; }
     const d = await res.json();
