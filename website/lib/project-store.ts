@@ -65,6 +65,18 @@ export interface ProjectVersion {
   testCaseCount?: number;
   scriptFileCount?: number;
   cicdFileCount?: number;
+  selectedPack?: string;
+  includedPageIds?: string[];
+  includedCaseIds?: string[];
+  pageFingerprints?: Record<string, string>;
+  validation?: {
+    status: string;
+    errors: string[];
+    repairAttempts: number;
+    generationMode?: string;
+  } | null;
+  repairAttempts?: number;
+  generationMode?: string;
 }
 
 export interface SavedRunResult {
@@ -217,6 +229,20 @@ export interface SaveVersionOptions {
   invalidate?: ("scan" | "journey" | "testcases" | "cicd" | "notes" | "scriptFiles" | "run")[];
   trigger: string;
   summary?: string;
+  generationMeta?: {
+    selectedPack?: string;
+    includedPageIds?: string[];
+    includedCaseIds?: string[];
+    pageFingerprints?: Record<string, string>;
+    validation?: {
+      status: string;
+      errors: string[];
+      repairAttempts: number;
+      generationMode?: string;
+    } | null;
+    repairAttempts?: number;
+    generationMode?: string;
+  };
 }
 
 export interface ProjectBundle {
@@ -631,6 +657,9 @@ function normalizeProjectGroupRecord(input: Record<string, unknown>): ProjectGro
 }
 
 function normalizeProjectVersion(input: Record<string, unknown>): ProjectVersion {
+  const rawValidation = input.validation && typeof input.validation === "object"
+    ? (input.validation as Record<string, unknown>)
+    : null;
   return {
     id: String(input.id || ""),
     projectId: String(input.projectId || ""),
@@ -646,6 +675,28 @@ function normalizeProjectVersion(input: Record<string, unknown>): ProjectVersion
     testCaseCount: Number(input.testCaseCount || 0),
     scriptFileCount: Number(input.scriptFileCount || 0),
     cicdFileCount: Number(input.cicdFileCount || 0),
+    selectedPack: input.selectedPack ? String(input.selectedPack) : undefined,
+    includedPageIds: Array.isArray(input.includedPageIds)
+      ? input.includedPageIds.map((entry) => String(entry))
+      : [],
+    includedCaseIds: Array.isArray(input.includedCaseIds)
+      ? input.includedCaseIds.map((entry) => String(entry))
+      : [],
+    pageFingerprints: input.pageFingerprints && typeof input.pageFingerprints === "object"
+      ? Object.fromEntries(
+          Object.entries(input.pageFingerprints as Record<string, unknown>).map(([key, value]) => [key, String(value)])
+        )
+      : {},
+    validation: rawValidation
+      ? {
+          status: String(rawValidation.status || "unknown"),
+          errors: Array.isArray(rawValidation.errors) ? rawValidation.errors.map((entry) => String(entry)) : [],
+          repairAttempts: Number(rawValidation.repairAttempts || 0),
+          generationMode: rawValidation.generationMode ? String(rawValidation.generationMode) : undefined,
+        }
+      : null,
+    repairAttempts: Number(input.repairAttempts || rawValidation?.repairAttempts || 0),
+    generationMode: input.generationMode ? String(input.generationMode) : rawValidation?.generationMode ? String(rawValidation.generationMode) : undefined,
   };
 }
 
@@ -1005,6 +1056,13 @@ export async function saveNewProjectVersion(
     testCaseCount: resolved.testcases.length,
     scriptFileCount: resolved.scriptFiles.length,
     cicdFileCount: resolved.cicd ? Object.keys(resolved.cicd).length : 0,
+    selectedPack: opts.generationMeta?.selectedPack ?? null,
+    includedPageIds: opts.generationMeta?.includedPageIds ?? [],
+    includedCaseIds: opts.generationMeta?.includedCaseIds ?? [],
+    pageFingerprints: opts.generationMeta?.pageFingerprints ?? {},
+    validation: opts.generationMeta?.validation ?? null,
+    repairAttempts: opts.generationMeta?.repairAttempts ?? opts.generationMeta?.validation?.repairAttempts ?? 0,
+    generationMode: opts.generationMeta?.generationMode ?? opts.generationMeta?.validation?.generationMode ?? null,
   });
 
   // 4. Write artifact docs (only those that changed or are new)

@@ -10,7 +10,10 @@ const state = {
   currentTab: "scan",
   currentPageData: null,
   testCases: [],
+  testGenerationMeta: null,
   scripts: null,
+  scriptValidation: null,
+  scriptGenerationMode: null,
   activeArtifactMode: "page",
   selectedFramework: "selenium-python",
   selectedFormat: "pom",
@@ -1689,6 +1692,12 @@ function buildProjectVersionBundle(trigger) {
 
   const artifacts = buildCurrentArtifactSet(mode);
   const artifactCounts = buildArtifactCountsFromArtifacts(mode, artifacts);
+  const approvedCaseIds = getApprovedCasesForSelectedPack().map((testCase) => testCase.id);
+  const currentPageFingerprint = mode === "page"
+    ? state.currentPageData?.meta?.pageFingerprint || state.testGenerationMeta?.pageFingerprint || null
+    : null;
+  const generationMode = state.scriptGenerationMode || (state.scripts ? (mode === "journey" ? "journey" : "page") : null);
+  const validation = state.scriptValidation || null;
   const meta = {
     ...baseMeta,
     mode,
@@ -1705,6 +1714,9 @@ function buildProjectVersionBundle(trigger) {
       : null,
     pageLabel: mode === "page" ? (baseMeta.pageLabel || suggested.pageLabel || null) : null,
   };
+  const pageFingerprints = mode === "page" && meta.id && currentPageFingerprint
+    ? { [meta.id]: currentPageFingerprint }
+    : {};
 
   const version = {
     id: versionId,
@@ -1720,6 +1732,13 @@ function buildProjectVersionBundle(trigger) {
     testCaseCount: artifactCounts.testCases,
     scriptFileCount: artifactCounts.scriptFiles,
     cicdFileCount: artifactCounts.cicdFiles,
+    selectedPack: state.selectedScriptPack || (mode === "journey" ? "e2e" : "page"),
+    includedPageIds: mode === "page" && meta.id ? [meta.id] : [],
+    includedCaseIds: approvedCaseIds,
+    pageFingerprints,
+    validation,
+    repairAttempts: validation?.repairAttempts || 0,
+    generationMode,
   };
 
   const activities = [{
@@ -1895,21 +1914,36 @@ function sanitizeProjectFileId(value) {
     .slice(0, 100);
 }
 
+function shouldKeepExplicitScriptFiles(files, mode) {
+  if (!Array.isArray(files) || !files.length) return false;
+  if (mode === "journey") return true;
+
+  const seenKeys = new Set();
+  return files.some((file) => {
+    const filename = String(file?.filename || "");
+    const derivedKey = String(file?.key || inferPageScriptKey(filename));
+    if (filename.includes("/")) return true;
+    if (!FILE_ORDER.includes(derivedKey) && !BDD_FILE_ORDER.includes(derivedKey)) return true;
+    if (seenKeys.has(derivedKey)) return true;
+    seenKeys.add(derivedKey);
+    return false;
+  });
+}
+
 function reconstructScriptsFromFiles(files, mode) {
   if (!Array.isArray(files) || !files.length) return null;
-  if (mode === "journey") {
+  if (shouldKeepExplicitScriptFiles(files, mode)) {
     return {
       framework: state.activeProject?.activeFramework || state.selectedFramework,
+      __group: files[0]?.group || (mode === "journey" ? "e2e" : "page"),
+      generationMode: mode === "journey" ? "journey" : "page",
       files: files.map((file) => ({
         filename: file.filename,
         content: file.content,
-        key: file.key || file.filename,
+        key: file.filename,
         group: file.group || "page",
         stepId: file.stepId || null,
       })),
-      summary: {
-        journeyExecutable: files.some((file) => file.group === "journey"),
-      },
     };
   }
 
@@ -1936,6 +1970,8 @@ function applyProjectRecordToEditor(record) {
   setActiveProject(record.meta, { record });
   setSelectedFramework(record.meta.activeFramework || state.selectedFramework);
   cicdGeneratedConfigs = record.artifacts.cicd || null;
+  state.scriptValidation = record.latestVersion?.validation || null;
+  state.scriptGenerationMode = record.latestVersion?.generationMode || null;
 
   if (record.meta.mode === "journey" && record.artifacts.journey) {
     const loadedJourney = hydrateJourney(record.artifacts.journey);
@@ -1943,19 +1979,35 @@ function applyProjectRecordToEditor(record) {
     state.activeArtifactMode = "journey";
     state.testCases = decorateLoadedTestCases(record.artifacts.testcases || loadedJourney.generated?.testCases || []);
     state.scripts = reconstructScriptsFromFiles(record.artifacts.scriptFiles, "journey");
-    state.selectedScriptPack = state.scripts?.selectedPack || "e2e";
-    state.selectedFile = Array.isArray(state.scripts?.files) ? state.scripts.files[0]?.filename || null : null;
+    state.selectedScriptPack = state.scripts?.selectedPack || record.latestVersion?.selectedPack || "e2e";
+    state.testGenerationMeta = null;
     seedJourneyTCGroups();
     renderJourneyTab();
     switchTab(record.artifacts.testcases?.length ? "testcases" : "journey");
   } else {
-    const pageData = record.artifacts.scan || createFallbackPageData(record.meta.sourceUrl, record.meta.name);
+    const persistedFingerprint = record.latestVersion?.pageFingerprints?.[record.meta.id] || null;
+    const scanArtifact = record.artifacts.scan || createFallbackPageData(record.meta.sourceUrl, record.meta.name);
+    const pageData = persistedFingerprint && !scanArtifact?.meta?.pageFingerprint
+      ? {
+          ...scanArtifact,
+          meta: {
+            ...(scanArtifact.meta || {}),
+            pageFingerprint: persistedFingerprint,
+          },
+        }
+      : scanArtifact;
     state.currentPageData = pageData;
     state.activeArtifactMode = "page";
     state.testCases = decorateLoadedTestCases(record.artifacts.testcases || []);
     state.scripts = reconstructScriptsFromFiles(record.artifacts.scriptFiles, "page");
-    state.selectedScriptPack = state.scripts?.__group || "page";
-    state.selectedFile = "base";
+    state.selectedScriptPack = state.scripts?.__group || record.latestVersion?.selectedPack || "page";
+    state.testGenerationMeta = pageData?.meta?.pageFingerprint
+      ? {
+          pageFingerprint: pageData.meta.pageFingerprint,
+          qualityReport: pageData.meta.qualityReport || null,
+          coverageSummary: pageData.meta.coverageSummary || null,
+        }
+      : null;
     hide("idle-state");
     hide("scanning-state");
     show("results-state");
@@ -1964,6 +2016,7 @@ function applyProjectRecordToEditor(record) {
     switchTab(record.artifacts.testcases?.length ? "testcases" : "scan");
   }
 
+  state.selectedFile = getActiveScriptFiles()[0]?.key || null;
   if (state.scripts) {
     document.getElementById("script-badge").classList.remove("hidden");
     renderFileList();
@@ -2434,6 +2487,13 @@ async function startScan() {
   }
 
   state.currentPageData = result.data;
+  state.testGenerationMeta = result.data?.meta?.pageFingerprint
+    ? {
+        pageFingerprint: result.data.meta.pageFingerprint,
+        qualityReport: result.data.meta.qualityReport || null,
+        coverageSummary: result.data.meta.coverageSummary || null,
+      }
+    : null;
   fillEl.style.width = "100%";
   stepEl.textContent = "Scan complete!";
   if (window.qadeckAuth) window.qadeckAuth.logScan();
@@ -2571,6 +2631,9 @@ async function loadJourneyDraft() {
       state.activeArtifactMode = "journey";
       state.testCases = decorateLoadedTestCases(state.journey.generated.testCases);
       state.scripts = state.journey.generated.scripts || null;
+      state.scriptValidation = null;
+      state.scriptGenerationMode = state.scripts ? "journey" : null;
+      state.testGenerationMeta = null;
       state.selectedScriptPack = state.scripts?.selectedPack || "e2e";
       state.selectedFile = Array.isArray(state.scripts?.files) ? state.scripts.files[0]?.filename || null : state.selectedFile;
       seedJourneyTCGroups();
@@ -2579,6 +2642,9 @@ async function loadJourneyDraft() {
       state.activeArtifactMode = "page";
       state.testCases = [];
       state.scripts = null;
+      state.scriptValidation = null;
+      state.scriptGenerationMode = null;
+      state.testGenerationMeta = null;
       state.selectedScriptPack = "page";
       state.selectedFile = null;
       state.tcGroupExpanded = {};
@@ -3060,6 +3126,9 @@ async function resetJourneyDraft() {
     state.activeArtifactMode = "page";
     state.testCases = [];
     state.scripts = null;
+    state.scriptValidation = null;
+    state.scriptGenerationMode = null;
+    state.testGenerationMeta = null;
     updateTCBadge();
     renderTCList();
   }
@@ -3103,6 +3172,8 @@ async function generateJourneyTestCases() {
   state.activeArtifactMode = "journey";
   state.testCases = decorateLoadedTestCases(result.testCases || []);
   state.scripts = null;
+  state.scriptValidation = null;
+  state.scriptGenerationMode = null;
   state.selectedScriptPack = state.testCases.some((tc) => tc.caseKind === "flow") ? "e2e" : "page";
   state.journey.generated = {
     ...state.journey.generated,
@@ -3170,9 +3241,26 @@ async function generateTestCases() {
   }
 
   state.testCases = decorateLoadedTestCases(result.testCases || []);
+  state.currentPageData = {
+    ...state.currentPageData,
+    meta: {
+      ...(state.currentPageData?.meta || {}),
+      pageFingerprint: result.pageFingerprint || state.currentPageData?.meta?.pageFingerprint || null,
+      qualityReport: result.qualityReport || null,
+      coverageSummary: result.coverageSummary || null,
+    },
+  };
+  state.testGenerationMeta = {
+    pageFingerprint: result.pageFingerprint || state.currentPageData?.meta?.pageFingerprint || null,
+    qualityReport: result.qualityReport || null,
+    coverageSummary: result.coverageSummary || null,
+  };
   state.activeArtifactMode = "page";
   state.scripts = null;
+  state.scriptValidation = null;
+  state.scriptGenerationMode = null;
   state.selectedScriptPack = "page";
+  state.selectedFile = null;
   state.tcGroupExpanded = {};
 
   show("tc-content");
@@ -4256,12 +4344,36 @@ async function generateScript() {
 
   if (!result?.success) {
     show("script-empty");
-    showToast(result?.error || "Script generation failed", "error");
+    state.scriptValidation = result?.validation || null;
+    state.scriptGenerationMode = result?.generationMode || null;
+    const validationError = Array.isArray(result?.validation?.errors)
+      ? result.validation.errors.find(Boolean)
+      : "";
+    showToast(validationError || result?.error || "Script generation failed", "error");
     return;
   }
 
-  state.scripts = { ...result.scripts, __group: state.selectedScriptPack };
-  state.selectedFile = state.selectedFormat === "bdd" ? "feature" : "base";
+  const explicitFiles = Array.isArray(result.files)
+    ? result.files.map((file) => ({
+        filename: file.filename,
+        content: file.content,
+        key: file.filename,
+        group: file.group || state.selectedScriptPack,
+        stepId: file.stepId || null,
+      }))
+    : null;
+
+  state.scripts = explicitFiles?.length
+    ? {
+        ...result.scripts,
+        __group: state.selectedScriptPack,
+        generationMode: result.generationMode || "page",
+        files: explicitFiles,
+      }
+    : { ...result.scripts, __group: state.selectedScriptPack };
+  state.scriptValidation = result.validation || null;
+  state.scriptGenerationMode = result.generationMode || "page";
+  state.selectedFile = getActiveScriptFiles()[0]?.key || null;
   state.activeArtifactMode = "page";
   syncScriptPackSelect();
 
@@ -4318,6 +4430,8 @@ async function generateJourneyScript() {
 
   state.activeArtifactMode = "journey";
   state.scripts = { ...result.bundle, selectedPack: state.selectedScriptPack };
+  state.scriptValidation = null;
+  state.scriptGenerationMode = "journey";
   state.selectedFile = result.bundle?.files?.[0]?.filename || null;
   state.journey.generated = {
     ...state.journey.generated,
@@ -4347,14 +4461,18 @@ function isJourneyBundle() {
   return state.activeArtifactMode === "journey" && Array.isArray(state.scripts?.files);
 }
 
+function hasExplicitScriptBundle() {
+  return Array.isArray(state.scripts?.files);
+}
+
 function isBDDBundle() {
   return state.selectedFormat === "bdd" && !!state.scripts?.feature;
 }
 
 function getActiveScriptFiles() {
-  if (isJourneyBundle()) {
+  if (hasExplicitScriptBundle()) {
     return (state.scripts.files || []).map((file) => ({
-      key: file.filename,
+      key: file.key || file.filename,
       filename: file.filename,
       content: file.content,
       group: file.group,
@@ -4384,13 +4502,14 @@ function getActiveScriptFiles() {
 function renderFileList() {
   const container = document.getElementById("file-tabs");
   container.innerHTML = "";
+  const explicitBundle = hasExplicitScriptBundle();
 
   getActiveScriptFiles().forEach((file) => {
     const btn = document.createElement("button");
     btn.className = "file-tab" + (state.selectedFile === file.key ? " active" : "");
-    const label = isJourneyBundle() ? file.filename.split("/").pop() : isBDDBundle() ? file.filename : file.filename;
+    const label = explicitBundle ? (file.filename.split("/").pop() || file.filename) : isBDDBundle() ? file.filename : file.filename;
     btn.textContent = label;
-    btn.title = isBDDBundle() ? `BDD: ${file.filename}` : isJourneyBundle() ? `${file.group}: ${file.filename}` : file.filename;
+    btn.title = isBDDBundle() ? `BDD: ${file.filename}` : explicitBundle ? `${file.group}: ${file.filename}` : file.filename;
     btn.addEventListener("click", () => {
       state.selectedFile = file.key;
       renderFileList();
@@ -4425,6 +4544,7 @@ async function downloadZip() {
   if (!state.scripts) return;
 
   const isJourney = isJourneyBundle();
+  const explicitBundle = hasExplicitScriptBundle();
   const pageType = isJourney ? "journey" : (state.currentPageData?.meta?.pageType || "page");
   const projectName = `qa_deck_${pageType}_${Date.now()}`;
 
@@ -4438,7 +4558,33 @@ async function downloadZip() {
     const isPwTs    = framework === "playwright-typescript";
     const isPwPy    = framework === "playwright-python";
 
-    if (isJourney) {
+    if (explicitBundle) {
+      const explicitFiles = state.scripts.files || [];
+      const explicitFileSet = new Set(explicitFiles.map((file) => file.filename));
+
+      explicitFiles.forEach((file) => {
+        zip.file(file.filename, file.content);
+      });
+
+      if (!explicitFileSet.has("README.md")) {
+        zip.file("README.md", buildProjectReadme(framework, pageType, state.testCases.filter((t) => t.approved).length));
+      }
+
+      if (!isJourney && framework === "selenium-python") {
+        const conftest = buildConftest();
+        const hasAccessibility = explicitFiles.some((file) => file.key === "accessibility" || /access/i.test(file.filename));
+        const hasVisual = explicitFiles.some((file) => file.key === "visualTest" || /visual/i.test(file.filename));
+
+        if (!explicitFileSet.has("requirements.txt")) {
+          zip.file("requirements.txt", buildRequirements(framework, hasAccessibility, hasVisual));
+        }
+        if (!explicitFileSet.has("conftest.py")) zip.file("conftest.py", conftest);
+        if (!explicitFileSet.has("tests/conftest.py")) zip.file("tests/conftest.py", conftest);
+        if (!explicitFileSet.has("pages/__init__.py")) zip.file("pages/__init__.py", "");
+        if (!explicitFileSet.has("data/__init__.py")) zip.file("data/__init__.py", "");
+        if (!explicitFileSet.has("tests/__init__.py")) zip.file("tests/__init__.py", "");
+      }
+    } else if (isJourney) {
       state.scripts.files.forEach((file) => {
         zip.file(file.filename, file.content);
       });
@@ -4516,11 +4662,12 @@ async function downloadZip() {
       }
     }
 
-    // Add README
-    const readme = buildProjectReadme(framework, pageType, state.testCases.filter(t => t.approved).length);
-    zip.file("README.md", readme);
+    if (!explicitBundle) {
+      const readme = buildProjectReadme(framework, pageType, state.testCases.filter(t => t.approved).length);
+      zip.file("README.md", readme);
+    }
 
-    if (isBDDBundle()) {
+    if (!explicitBundle && isBDDBundle()) {
       // BDD-specific dependency files
       if (framework === "selenium-python") {
         zip.file("requirements.txt", "behave\nselenium\nwebdriver-manager\n");
@@ -4530,7 +4677,7 @@ async function downloadZip() {
         zip.file("package.json", JSON.stringify({ name: pageType + "-bdd-tests", version: "1.0.0", scripts: { test: "cucumber-js" }, dependencies: { "@cucumber/cucumber": "^10.0.0", playwright: "^1.40.0", typescript: "^5.0.0" } }, null, 2));
         zip.file("cucumber.config.ts", `export default { paths: ["features/**/*.feature"], require: ["step-definitions/**/*.ts", "hooks.ts"], format: ["progress-bar", "html:reports/report.html"] };\n`);
       }
-    } else {
+    } else if (!explicitBundle) {
       // Add requirements file if Python (POM mode)
       if (!isJava) {
         if (isPwTs) {

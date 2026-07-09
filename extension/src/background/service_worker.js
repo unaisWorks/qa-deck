@@ -352,7 +352,16 @@ async function handleGenerateTests(message, _sender, sendResponse) {
       body: JSON.stringify({ pageData, apiKey, exploratoryMode: exploratoryMode || false }),
     }, 90000);
     const data = await res.json();
-    if (data.success) { sendResponse({ success: true, testCases: data.testCases }); return; }
+    if (data.success) {
+      sendResponse({
+        success: true,
+        testCases: data.testCases,
+        pageFingerprint: data.pageFingerprint || null,
+        qualityReport: data.qualityReport || null,
+        coverageSummary: data.coverageSummary || null,
+      });
+      return;
+    }
     throw new Error(data.error);
   } catch (err) {
     if (isNetworkError(err)) return fallbackGenerateTests(message, sendResponse);
@@ -368,8 +377,24 @@ async function handleGenerateScript(message, _sender, sendResponse) {
       body: JSON.stringify({ testCases, pageData, framework, format, customAssertions, networkCalls, visualTesting, perfAssertions, environments, datasetsMap, apiKey }),
     }, 90000);
     const data = await res.json();
-    if (data.success) { sendResponse({ success: true, scripts: data.scripts }); return; }
-    throw new Error(data.error);
+    if (data.success) {
+      sendResponse({
+        success: true,
+        scripts: data.scripts,
+        files: data.files || null,
+        validation: data.validation || null,
+        generationMode: data.generationMode || "page",
+      });
+      return;
+    }
+    sendResponse({
+      success: false,
+      error: data.error,
+      validation: data.validation || null,
+      files: data.files || null,
+      generationMode: data.generationMode || "page",
+    });
+    return;
   } catch (err) {
     if (isNetworkError(err)) return fallbackGenerateScript(message, sendResponse);
     sendResponse({ success: false, error: err.message });

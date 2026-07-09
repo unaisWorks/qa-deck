@@ -58,6 +58,21 @@ function formatDateTime(value: string) {
   });
 }
 
+function downloadBase64File(filename: string, contentBase64: string) {
+  if (!filename || !contentBase64 || typeof window === "undefined") return;
+  const binary = window.atob(contentBase64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+}
+
 function statusTone(status: ProjectMeta["status"]) {
   return {
     draft: "bg-white/5 text-white/60 border-white/10",
@@ -173,6 +188,114 @@ function getCasesForPack(cases: WebsiteTestCase[], pack: "page" | WebsiteTestCas
     if (pack === "page") return tc.caseKind !== "flow";
     return tc.packs.includes(pack);
   });
+}
+
+type BundleReadinessState = {
+  status: "ready" | "needs_regeneration" | "validation_failed" | "blocked";
+  label: string;
+  description: string;
+  errors: string[];
+};
+
+function getBundlePageFingerprint(projectBundle: ProjectBundle) {
+  const scan = projectBundle.artifacts.scan as Record<string, unknown> | null;
+  const meta = scan?.meta as Record<string, unknown> | undefined;
+  return meta?.pageFingerprint ? String(meta.pageFingerprint) : "";
+}
+
+function getApprovedCasesForBundlePack(projectBundle: ProjectBundle, pack: "page" | WebsiteTestCasePack) {
+  const rawCases = Array.isArray(projectBundle.artifacts.testcases)
+    ? (projectBundle.artifacts.testcases as Record<string, unknown>[])
+    : [];
+  const cases = rawCases.map((raw, index) => normalizeWebsiteTestCaseWithContext(raw, index, projectBundle.meta));
+  return getCasesForPack(cases, pack);
+}
+
+function deriveBundleReadiness(
+  latestVersion: ProjectBundle["latestVersion"],
+  pageBundles: ProjectBundle[],
+  selectedPack: "page" | WebsiteTestCasePack,
+  locallyMarkedStale: boolean
+): BundleReadinessState {
+  const approvedPages = pageBundles
+    .map((pageBundle) => ({
+      pageId: pageBundle.meta.id,
+      cases: getApprovedCasesForBundlePack(pageBundle, selectedPack),
+      fingerprint: getBundlePageFingerprint(pageBundle),
+    }))
+    .filter((entry) => entry.cases.length > 0);
+
+  if (!approvedPages.length) {
+    return {
+      status: "blocked",
+      label: "Blocked by missing approved cases",
+      description: "Approve at least one test case on a saved page before generating a combined Selenium bundle.",
+      errors: [],
+    };
+  }
+
+  if (!latestVersion || !latestVersion.hasScripts) {
+    return {
+      status: "needs_regeneration",
+      label: "Needs regeneration",
+      description: "Generate a run-ready Selenium Python bundle for the approved project cases.",
+      errors: [],
+    };
+  }
+
+  if (latestVersion.validation?.status && latestVersion.validation.status !== "passed") {
+    return {
+      status: "validation_failed",
+      label: "Validation failed",
+      description: "The last generated bundle did not pass bundle validation and should not be used as ready-to-run output.",
+      errors: latestVersion.validation.errors || [],
+    };
+  }
+
+  if (latestVersion.generationMode !== "project-bundle" || latestVersion.selectedPack !== selectedPack) {
+    return {
+      status: "needs_regeneration",
+      label: "Needs regeneration",
+      description: "The current saved scripts were generated for a different scope or pack than the one selected now.",
+      errors: [],
+    };
+  }
+
+  const includedPageIds = new Set(latestVersion.includedPageIds || []);
+  const includedCaseIds = new Set(latestVersion.includedCaseIds || []);
+  const fingerprintSnapshot = latestVersion.pageFingerprints || {};
+
+  const hasPageMismatch = approvedPages.some((entry) => !includedPageIds.has(entry.pageId));
+  const hasFingerprintMismatch = approvedPages.some((entry) => {
+    const saved = fingerprintSnapshot[entry.pageId];
+    return Boolean(saved && entry.fingerprint && saved !== entry.fingerprint);
+  });
+  const hasCaseMismatch = approvedPages.some((entry) => entry.cases.some((tc) => !includedCaseIds.has(tc.id)));
+
+  if (locallyMarkedStale || hasPageMismatch || hasFingerprintMismatch || hasCaseMismatch) {
+    return {
+      status: "needs_regeneration",
+      label: "Needs regeneration",
+      description: "One or more saved pages or approved test cases changed after the last bundle generation.",
+      errors: [],
+    };
+  }
+
+  return {
+    status: "ready",
+    label: "Ready",
+    description: "The latest saved Selenium Python bundle matches the current approved cases across saved pages.",
+    errors: [],
+  };
+}
+
+function readinessTone(status: BundleReadinessState["status"]) {
+  return {
+    ready: "bg-green/10 text-green border-green/20",
+    needs_regeneration: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+    validation_failed: "bg-red-500/10 text-red-300 border-red-500/20",
+    blocked: "bg-white/5 text-white/55 border-white/10",
+  }[status];
 }
 
 function suggestPacksForTestCase(tc: WebsiteTestCase) {
@@ -423,6 +546,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const { user, ready, signingOut, handleSignOut } = useDashboardSession();
   const [bundle, setBundle] = useState<ProjectBundle | null>(null);
+  const [projectPageBundles, setProjectPageBundles] = useState<ProjectBundle[]>([]);
   const [allProjects, setAllProjects] = useState<ProjectMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -541,7 +665,9 @@ export default function ProjectDetailPage() {
       setTcLibraryFilter(getDefaultCaseFilterForProject(nextBundle.meta, normalizedCases));
       setAddForm(createEmptyTestCaseEditor(nextBundle.meta));
       setRegenFramework(nextBundle.meta.activeFramework || "selenium-python");
-      const generatedPack = (nextBundle.artifacts.scriptFiles[0]?.group as "page" | WebsiteTestCasePack | undefined) || "page";
+      const generatedPack = ((nextBundle.latestVersion?.selectedPack as "page" | WebsiteTestCasePack | undefined)
+        || (nextBundle.artifacts.scriptFiles[0]?.group as "page" | WebsiteTestCasePack | undefined)
+        || "page");
       setSelectedScriptPack(generatedPack);
       setSelectedRunPack(generatedPack);
       setScriptsStale(false);
@@ -1194,6 +1320,10 @@ export default function ProjectDetailPage() {
     setRegenSaving(true);
     setRegenError("");
     try {
+      if (regenFramework !== "selenium-python") {
+        throw new Error("The combined project bundle flow is currently stabilized for Selenium Python only.");
+      }
+
       // Step 1: get api key from extension
       const keyResult = await getExtensionApiKey();
       if (!keyResult.success || !keyResult.apiKey) {
@@ -1202,54 +1332,102 @@ export default function ProjectDetailPage() {
         return;
       }
       const apiKey = keyResult.apiKey;
-      const testCases = getCasesForPack(localTestcases, selectedScriptPack);
-      if (!testCases.length) {
+      const bundlePages = projectPageBundles.length ? projectPageBundles : [bundle];
+      const totalApprovedCases = bundlePages.flatMap((pageBundle) =>
+        getApprovedCasesForBundlePack(pageBundle, selectedScriptPack)
+      );
+      if (!totalApprovedCases.length) {
         throw new Error(`No approved ${selectedScriptPack === "page" ? "test cases" : `${TESTCASE_PACK_LABELS[selectedScriptPack]} pack cases`} available to generate.`);
       }
-      const pageData = bundle.artifacts.scan || bundle.artifacts.journey || {};
+      if (!backendOnline) {
+        throw new Error("The local backend is offline. Start it with 'npm run dev' in the backend folder, then try again.");
+      }
+
+      const pagesPayload = bundlePages.map((pageBundle) => {
+        const rawCases = Array.isArray(pageBundle.artifacts.testcases)
+          ? (pageBundle.artifacts.testcases as Record<string, unknown>[])
+          : [];
+        const normalizedCases = rawCases.map((raw, index) => normalizeWebsiteTestCaseWithContext(raw, index, pageBundle.meta));
+        return {
+          pageId: pageBundle.meta.id,
+          pageLabel: pageBundle.meta.pageLabel || pageBundle.meta.name,
+          meta: {
+            pageLabel: pageBundle.meta.pageLabel || pageBundle.meta.name,
+            sourceUrl: pageBundle.meta.sourceUrl,
+          },
+          scan: pageBundle.artifacts.scan || pageBundle.artifacts.journey || {},
+          testCases: normalizedCases,
+          pageFingerprint:
+            getBundlePageFingerprint(pageBundle) ||
+            pageBundle.latestVersion?.pageFingerprints?.[pageBundle.meta.id] ||
+            null,
+        };
+      });
+
       const framework = regenFramework;
+      const res = await fetch(`${BACKEND_URL}/api/generate-project-bundle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          framework,
+          pack: selectedScriptPack,
+          projectName: getProjectAppDisplayName(bundle.meta),
+          baseUrl: bundle.meta.sourceUrl,
+          pages: pagesPayload,
+          apiKey,
+        }),
+      });
+      const data = await res.json();
 
-      let scripts: Record<string, { filename: string; content: string }> | null = null;
-
-      // Step 2: try backend first
-      if (backendOnline) {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/generate-script`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ testCases, pageData, framework, apiKey }),
-          });
-          const data = await res.json();
-          if (data.success && data.scripts) {
-            scripts = data.scripts;
-          }
-        } catch { /* fall through to inline */ }
+      if (!data?.validation?.status) {
+        throw new Error(data?.error || "Bundle generation failed.");
+      }
+      if (data.validation.status !== "passed") {
+        const detail = data.validation.errors?.length
+          ? `\n\n${data.validation.errors.join("\n")}`
+          : "";
+        throw new Error(`${data.error || "Generated bundle failed validation."}${detail}`);
       }
 
-      // Step 3: fallback — backend must be running for script generation
-      if (!scripts) {
-        throw new Error("The local backend is offline. Start it with 'npm run dev' in the qa-autopilot-backend folder, then try again.");
-      }
-
-      if (!scripts) throw new Error("Failed to generate scripts.");
-
-      // Flatten scripts object into scriptFiles array
-      const scriptFiles = Object.entries(scripts).map(([key, file], index) => ({
+      const scriptFiles = (Array.isArray(data.files) ? data.files : []).map((file: Record<string, unknown>, index: number) => ({
         id: crypto.randomUUID(),
-        filename: (file as { filename: string; content: string }).filename,
-        content: (file as { filename: string; content: string }).content,
-        key,
-        group: selectedScriptPack,
-        stepId: null,
-        sortOrder: index,
+        filename: String(file.filename || `file-${index + 1}`),
+        content: String(file.content || ""),
+        key: file.key ? String(file.key) : null,
+        group: file.group ? String(file.group) : selectedScriptPack,
+        stepId: file.stepId ? String(file.stepId) : null,
+        sortOrder: typeof file.sortOrder === "number" ? file.sortOrder : index,
       }));
 
-      await saveNewProjectVersion(user.uid, bundle.meta.id, {
-        artifactOverrides: { scriptFiles, activeFramework: framework },
-        invalidate: ["cicd", "run"],
-        trigger: "script_regenerated",
-        summary: `Script regenerated (${framework}, ${selectedScriptPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[selectedScriptPack]})`,
-      });
+      const generationMeta = {
+        selectedPack: selectedScriptPack,
+        includedPageIds: Array.isArray(data.includedPageIds) ? data.includedPageIds.map((entry: unknown) => String(entry)) : [],
+        includedCaseIds: Array.isArray(data.includedCaseIds) ? data.includedCaseIds.map((entry: unknown) => String(entry)) : [],
+        pageFingerprints: data.pageFingerprints && typeof data.pageFingerprints === "object"
+          ? Object.fromEntries(Object.entries(data.pageFingerprints).map(([key, value]) => [key, String(value)]))
+          : {},
+        validation: data.validation,
+        repairAttempts: Number(data.validation?.repairAttempts || 0),
+        generationMode: data.generationMode || "project-bundle",
+      };
+
+      const targetProjectIds = siblingPages.length ? siblingPages.map((page) => page.id) : [bundle.meta.id];
+      await Promise.all(
+        targetProjectIds.map((targetProjectId) =>
+          saveNewProjectVersion(user.uid, targetProjectId, {
+            artifactOverrides: { scriptFiles, activeFramework: framework },
+            invalidate: ["cicd", "run"],
+            trigger: "script_regenerated",
+            summary: `Run-ready bundle regenerated (${framework}, ${selectedScriptPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[selectedScriptPack]})`,
+            generationMeta,
+          })
+        )
+      );
+
+      if (data.download?.filename && data.download?.contentBase64) {
+        downloadBase64File(String(data.download.filename), String(data.download.contentBase64));
+      }
+
       setShowRegenModal(false);
       setScriptsStale(false);
       setSelectedRunPack(selectedScriptPack);
@@ -1430,8 +1608,15 @@ export default function ProjectDetailPage() {
 
   const quality = useMemo(() => (bundle ? deriveProjectQuality(bundle) : null), [bundle]);
   const activeFile = bundle?.artifacts.scriptFiles.find((file) => file.id === selectedFileId) || bundle?.artifacts.scriptFiles[0] || null;
-  const currentGeneratedPack = (bundle?.artifacts.scriptFiles[0]?.group as "page" | WebsiteTestCasePack | undefined) || "page";
+  const currentGeneratedPack = ((bundle?.latestVersion?.selectedPack as "page" | WebsiteTestCasePack | undefined)
+    || (bundle?.artifacts.scriptFiles[0]?.group as "page" | WebsiteTestCasePack | undefined)
+    || "page");
   const activeRunCases = useMemo(() => getCasesForPack(localTestcases, currentGeneratedPack), [currentGeneratedPack, localTestcases]);
+  const bundleReadiness = useMemo(
+    () => deriveBundleReadiness(bundle?.latestVersion || null, projectPageBundles, selectedScriptPack, scriptsStale),
+    [bundle?.latestVersion, projectPageBundles, scriptsStale, selectedScriptPack]
+  );
+  const effectiveScriptsStale = bundleReadiness.status === "needs_regeneration";
   const cicdEntries = bundle?.artifacts.cicd ? Object.entries(bundle.artifacts.cicd) : [];
   const notes = bundle?.artifacts.notes;
   const filteredTestcases = localTestcases.filter((tc) => {
@@ -1462,7 +1647,7 @@ export default function ProjectDetailPage() {
         pack,
         cases,
         labels,
-        stale: scriptsStale && currentGeneratedPack === pack,
+        stale: effectiveScriptsStale && currentGeneratedPack === pack,
       };
     };
 
@@ -1477,7 +1662,7 @@ export default function ProjectDetailPage() {
           : []
         : [],
     };
-  }, [bundle, currentGeneratedPack, localTestcases, scriptsStale]);
+  }, [bundle, currentGeneratedPack, effectiveScriptsStale, localTestcases]);
   const groupedTestcases = useMemo(() => {
     if (!bundle) return [];
 
@@ -1514,6 +1699,37 @@ export default function ProjectDetailPage() {
         return leftLabel.localeCompare(rightLabel);
       });
   }, [allProjects, bundle]);
+
+  const siblingPageIds = useMemo(() => siblingPages.map((page) => page.id).join("|"), [siblingPages]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjectPages() {
+      if (!user || !siblingPages.length) {
+        setProjectPageBundles(bundle ? [bundle] : []);
+        return;
+      }
+
+      try {
+        const nextBundles = await Promise.all(
+          siblingPages.map((page) => getProjectBundle(user.uid, page.id).catch(() => null))
+        );
+        if (!cancelled) {
+          setProjectPageBundles(nextBundles.filter(Boolean) as ProjectBundle[]);
+        }
+      } catch {
+        if (!cancelled) {
+          setProjectPageBundles(bundle ? [bundle] : []);
+        }
+      }
+    }
+
+    loadProjectPages();
+    return () => {
+      cancelled = true;
+    };
+  }, [bundle, siblingPageIds, siblingPages, user]);
 
   function openSiblingPage(pageId: string, nextTab?: ProjectTab) {
     if (nextTab) setActiveTab(nextTab);
@@ -1629,16 +1845,16 @@ export default function ProjectDetailPage() {
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] lg:items-center">
                   <div>
                     <p className="text-xs uppercase tracking-[0.24em] text-green/70 font-mono mb-3">AI workflow</p>
-                    <h2 className="text-xl font-semibold mb-2">AI drafts the work here. You review, save, and run it.</h2>
+                    <h2 className="text-xl font-semibold mb-2">AI drafts the work here. You review, validate, and download the run-ready bundle.</h2>
                     <p className="text-sm text-white/50 max-w-2xl leading-6">
-                      This page keeps one saved page inside the project grounded in the live app. Use it to review AI-generated test cases, organize packs, generate scripts, and decide what should be saved or rerun.
+                      This project page combines approved test cases from saved pages into one Selenium Python bundle. QA Deck grounds the page scans, validates the generated files before they are marked ready, and helps you see when a bundle needs regeneration.
                     </p>
                   </div>
                   <div className="grid sm:grid-cols-3 lg:grid-cols-1 gap-3">
                     {[
-                      ["Test Cases", "Review and refine the AI-generated checks for this saved page."],
-                      ["Scripts", "Turn approved work into automation files for the framework you need."],
-                      ["Runs", "Execute the generated bundle and save results when the output is worth keeping."],
+                      ["Test Cases", "Review and approve the AI-generated checks on each saved page before bundling."],
+                      ["Scripts", "Generate one validated Selenium Python bundle from the approved project cases."],
+                      ["Runs", "Execute the saved bundle and keep the run result when the output is worth preserving."],
                     ].map(([title, body]) => (
                       <div key={title} className="rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3">
                         <div className="text-sm font-medium text-white mb-1">{title}</div>
@@ -1705,6 +1921,10 @@ export default function ProjectDetailPage() {
                       ? "Generated content available"
                       : "Ready to generate"}
                   </span>
+                </div>
+                <div className={`rounded-xl border px-4 py-2.5 flex gap-3 items-center ${readinessTone(bundleReadiness.status)}`}>
+                  <span className="text-xs opacity-70">Bundle status</span>
+                  <span className="font-semibold">{bundleReadiness.label}</span>
                 </div>
               </div>
 
@@ -1994,7 +2214,7 @@ export default function ProjectDetailPage() {
                     </div>
                   </div>
 
-                  {scriptsStale && (
+                  {effectiveScriptsStale && (
                     <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/8 px-4 py-4">
                       <div className="flex items-start gap-2.5 mb-3">
                         <span className="text-amber-400 mt-0.5 shrink-0">⚠</span>
@@ -2002,8 +2222,8 @@ export default function ProjectDetailPage() {
                           <div className="text-sm font-semibold text-amber-300">Test cases changed</div>
                           <div className="text-xs text-amber-200/60 mt-0.5">
                             {bundle.artifacts.scriptFiles.length > 0
-                              ? "Your saved scripts no longer match the current test cases. Choose how to handle the old scripts."
-                              : "Test cases updated. Generate a new script when ready."}
+                              ? "Your saved bundle no longer matches the current approved test cases across this project. Generate a new bundle when you are ready."
+                              : "Test cases updated. Generate a new bundle when ready."}
                           </div>
                         </div>
                       </div>
@@ -2012,7 +2232,7 @@ export default function ProjectDetailPage() {
                           onClick={() => { setScriptsStale(false); setActiveTab("scripts"); setShowRegenModal(true); }}
                           className="text-xs px-3 py-1.5 rounded-xl bg-green text-white font-semibold hover:bg-green/80 transition-colors"
                         >
-                          ↻ Regenerate script
+                          ↻ Generate bundle
                         </button>
                         {bundle.artifacts.scriptFiles.length > 0 && (
                           <button
@@ -2020,7 +2240,7 @@ export default function ProjectDetailPage() {
                             disabled={removeScriptSaving}
                             className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-60"
                           >
-                            {removeScriptSaving ? "Removing…" : "✕ Remove old script"}
+                            {removeScriptSaving ? "Removing…" : "✕ Remove old bundle"}
                           </button>
                         )}
                         <button
@@ -2421,11 +2641,11 @@ export default function ProjectDetailPage() {
             {/* ── Tab: Scripts ─────────────────────────────────────────────── */}
             {activeTab === "scripts" && (
               <div className="grid gap-6">
-                {scriptsStale && bundle.artifacts.scriptFiles.length > 0 && (
+                {effectiveScriptsStale && bundle.artifacts.scriptFiles.length > 0 && (
                   <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-amber-500/20 bg-amber-500/8 text-xs">
                     <div className="flex items-center gap-2 text-amber-300">
                       <span>⚠</span>
-                      <span>Test cases changed — these scripts are from the previous version.</span>
+                      <span>Approved cases changed — this saved bundle is from the previous generation.</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button onClick={() => setShowRegenModal(true)} className="px-2.5 py-1 rounded-lg bg-green text-white font-semibold hover:bg-green/80 transition-colors">↻ Regenerate</button>
@@ -2437,8 +2657,8 @@ export default function ProjectDetailPage() {
                 <div className="bg-bg-card border border-border rounded-3xl p-6">
                   <div className="flex items-center justify-between gap-4 mb-5">
                     <div>
-                      <h2 className="text-xl font-semibold">Script browser</h2>
-                      <p className="text-sm text-white/40 mt-1">Generate and review script files for the selected pack.</p>
+                      <h2 className="text-xl font-semibold">Run-ready bundle</h2>
+                      <p className="text-sm text-white/40 mt-1">Generate and review the validated Selenium Python bundle for the selected project pack.</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 overflow-hidden">
@@ -2468,7 +2688,7 @@ export default function ProjectDetailPage() {
                         onClick={() => setShowRegenModal(true)}
                         className="text-xs px-3 py-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1"
                       >
-                        Regenerate script
+                        Generate bundle
                       </button>
                       {backendOnline && bundle.artifacts.scriptFiles.length > 0 && (
                         <>
@@ -2496,9 +2716,29 @@ export default function ProjectDetailPage() {
                       <span className="ml-3">Current generated bundle: <span className="text-white/75">{currentGeneratedPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[currentGeneratedPack]}</span></span>
                     )}
                   </div>
+                  <div className={`mb-4 rounded-2xl border px-4 py-3 ${readinessTone(bundleReadiness.status)}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold">{bundleReadiness.label}</div>
+                        <p className="text-xs opacity-80 mt-1 max-w-2xl">{bundleReadiness.description}</p>
+                        {bundleReadiness.errors.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-[11px] opacity-90">
+                            {bundleReadiness.errors.slice(0, 4).map((error) => (
+                              <li key={error}>• {error}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="text-[11px] opacity-70 shrink-0">
+                        {bundle?.latestVersion?.generationMode === "project-bundle"
+                          ? `Last bundle pack: ${bundle.latestVersion.selectedPack === "page" ? "Test Cases" : TESTCASE_PACK_LABELS[(bundle.latestVersion.selectedPack as WebsiteTestCasePack) || "smoke"] || bundle.latestVersion.selectedPack}`
+                          : "No validated project bundle saved yet"}
+                      </div>
+                    </div>
+                  </div>
 
                   {!bundle.artifacts.scriptFiles.length ? (
-                    <div className="text-sm text-white/35">No scripts saved yet.</div>
+                    <div className="text-sm text-white/35">No saved bundle files yet.</div>
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3 mb-4">
@@ -3854,21 +4094,22 @@ export default function ProjectDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-bg-card border border-border rounded-3xl w-full max-w-sm flex flex-col shadow-2xl overflow-hidden">
               <div className="p-6 border-b border-border flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Regenerate script</h3>
+                <h3 className="text-lg font-semibold">Generate run-ready bundle</h3>
                 <button onClick={() => setShowRegenModal(false)} disabled={regenSaving} className="text-white/40 hover:text-white transition-colors">✕</button>
               </div>
               <div className="p-6 space-y-4">
-                <p className="text-sm text-white/60">Generate a new automation script using the latest test cases and page scan data.</p>
+                <p className="text-sm text-white/60">Generate one validated Selenium Python bundle from approved test cases across the saved pages in this project.</p>
                 {regenError && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">{regenError}</div>}
 
                 <div>
                   <label className="text-xs text-white/45 block mb-2">Framework</label>
                   <select value={regenFramework} onChange={e => setRegenFramework(e.target.value)} disabled={regenSaving} className="w-full bg-white/5 border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green transition-colors">
                     <option value="selenium-python">Selenium (Python)</option>
-                    <option value="playwright-python">Playwright (Python)</option>
-                    <option value="playwright-ts">Playwright (TypeScript)</option>
-                    <option value="cypress-ts">Cypress (TypeScript)</option>
                   </select>
+                </div>
+
+                <div className="text-[11px] text-white/45 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                  This golden path validates syntax, imports, and <code>pytest --collect-only</code> before the bundle is marked ready.
                 </div>
 
                 {!extState.connected && (
@@ -3886,7 +4127,7 @@ export default function ProjectDetailPage() {
                   className="bg-blue-500 text-white font-semibold px-5 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-60 text-sm flex items-center gap-2"
                 >
                   {regenSaving && <span className="w-3 h-3 border-2 border-white/50 border-t-transparent rounded-full animate-spin" />}
-                  {regenSaving ? "Generating…" : "Generate"}
+                  {regenSaving ? "Generating…" : "Generate bundle"}
                 </button>
               </div>
             </div>

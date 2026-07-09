@@ -151,7 +151,7 @@ function resolveRuntimeScriptTargets(file, framework) {
   const isPython = framework === "selenium-python" || framework === "playwright-python";
   if (!isPython) return [filename];
 
-  if (key === "pageObject") return [`pages/${filename}`, `page_objects/${filename}`];
+  if (key === "pageObject") return [`pages/${filename}`];
   if (["tests", "accessibility", "perfTest", "visualTest"].includes(key) || /^test_/i.test(filename)) {
     return [`tests/${filename}`];
   }
@@ -164,11 +164,95 @@ function buildRuntimePythonConftest() {
 import sys
 
 ROOT = os.path.dirname(__file__)
-for relative in ("pages", "page_objects"):
+for relative in ("pages", "page_objects", "data"):
     candidate = os.path.join(ROOT, relative)
     if os.path.isdir(candidate) and candidate not in sys.path:
         sys.path.insert(0, candidate)
 `;
+}
+
+function hashPayload(value) {
+  return crypto.createHash("sha1").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
+}
+
+function slugifyIdentifier(value, fallback = "item") {
+  const slug = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug || fallback;
+}
+
+function slugifyLabel(value, fallback = "item") {
+  return slugifyIdentifier(value, fallback).replace(/_/g, "-");
+}
+
+function stripFileExtension(value) {
+  return String(value || "").replace(/\.[^.]+$/, "");
+}
+
+async function runProcess(bin, args, options = {}) {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(bin, args, {
+      cwd: options.cwd,
+      env: options.env,
+      shell: options.shell || false,
+    });
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => resolve({ code: -1, stdout, stderr, error }));
+    child.on("close", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+  });
+}
+
+async function writeRuntimeWorkspace(files, framework, options = {}) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qadeck-bundle-"));
+  const headless = options.headless ?? true;
+
+  for (const file of files) {
+    const targets = resolveRuntimeScriptTargets(file, framework);
+    for (const target of targets) {
+      const filePath = path.join(tmpDir, target);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, patchHeadless(file.content, target, framework, headless));
+    }
+  }
+
+  if (framework === "selenium-python" || framework === "playwright-python") {
+    const runtimeConftest = buildRuntimePythonConftest();
+    const rootConftest = path.join(tmpDir, "conftest.py");
+    const testsConftest = path.join(tmpDir, "tests", "conftest.py");
+    const pagesInit = path.join(tmpDir, "pages", "__init__.py");
+    const pageObjectsInit = path.join(tmpDir, "page_objects", "__init__.py");
+    const dataInit = path.join(tmpDir, "data", "__init__.py");
+
+    fs.mkdirSync(path.dirname(testsConftest), { recursive: true });
+    fs.mkdirSync(path.dirname(pagesInit), { recursive: true });
+    fs.mkdirSync(path.dirname(pageObjectsInit), { recursive: true });
+    fs.mkdirSync(path.dirname(dataInit), { recursive: true });
+
+    if (!fs.existsSync(rootConftest)) fs.writeFileSync(rootConftest, runtimeConftest);
+    if (!fs.existsSync(testsConftest)) fs.writeFileSync(testsConftest, runtimeConftest);
+    if (!fs.existsSync(pagesInit)) fs.writeFileSync(pagesInit, "");
+    if (!fs.existsSync(pageObjectsInit)) fs.writeFileSync(pageObjectsInit, "");
+    if (!fs.existsSync(dataInit)) fs.writeFileSync(dataInit, "");
+  }
+
+  return tmpDir;
+}
+
+function cleanupWorkspace(tmpDir) {
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (_) {}
 }
 
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
@@ -201,6 +285,7 @@ const server = http.createServer(async (req, res) => {
     if (route === "GET /api/health" || route === "HEAD /api/health") return handleHealth(req, res);
     if (route === "POST /api/generate-tests") return await handleGenerateTests(req, res);
     if (route === "POST /api/generate-script") return await handleGenerateScript(req, res);
+    if (route === "POST /api/generate-project-bundle") return await handleGenerateProjectBundle(req, res);
     if (route === "POST /api/generate-journey-tests") return await handleGenerateJourneyTests(req, res);
     if (route === "POST /api/generate-journey-script") return await handleGenerateJourneyScript(req, res);
     if (route === "POST /api/run-tests") return await handleRunTests(req, res);
@@ -328,37 +413,25 @@ async function handleRunTests(req, res) {
 
   let tmpDir;
   try {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qadeck-run-"));
-    for (const f of scripts) {
-      const targets = resolveRuntimeScriptTargets(f, framework);
-      for (const target of targets) {
-        const filePath = path.join(tmpDir, target);
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(filePath, patchHeadless(f.content, target, framework, headless));
-      }
-    }
-
-    if (framework === "selenium-python" || framework === "playwright-python") {
-      const runtimeConftest = buildRuntimePythonConftest();
-      const rootConftest = path.join(tmpDir, "conftest.py");
-      const testsConftest = path.join(tmpDir, "tests", "conftest.py");
-      const pagesInit = path.join(tmpDir, "pages", "__init__.py");
-      const pageObjectsInit = path.join(tmpDir, "page_objects", "__init__.py");
-
-      if (!fs.existsSync(path.dirname(testsConftest))) fs.mkdirSync(path.dirname(testsConftest), { recursive: true });
-      if (!fs.existsSync(path.dirname(pagesInit))) fs.mkdirSync(path.dirname(pagesInit), { recursive: true });
-      if (!fs.existsSync(path.dirname(pageObjectsInit))) fs.mkdirSync(path.dirname(pageObjectsInit), { recursive: true });
-
-      fs.writeFileSync(rootConftest, runtimeConftest);
-      fs.writeFileSync(testsConftest, runtimeConftest);
-      fs.writeFileSync(pagesInit, "");
-      fs.writeFileSync(pageObjectsInit, "");
-    }
+    tmpDir = await writeRuntimeWorkspace(scripts, framework, { headless });
   } catch (err) {
     sseEvent({ type: "error", message: "Failed to write script files: " + err.message });
     res.end();
     return;
+  }
+
+  if (framework === "selenium-python" || framework === "playwright-python") {
+    const collectArgs = ["-m", "pytest", "--collect-only", "-q"];
+    const collectResult = await runProcess("python3", collectArgs, { cwd: tmpDir });
+    if (collectResult.code !== 0) {
+      sseEvent({
+        type: "error",
+        message: `Bundle validation failed before execution.\n${collectResult.stderr || collectResult.stdout || "Pytest collect-only failed."}`,
+      });
+      res.end();
+      cleanupWorkspace(tmpDir);
+      return;
+    }
   }
 
   // ── Spawn test runner ─────────────────────────────────────────────────────
@@ -384,7 +457,7 @@ async function handleRunTests(req, res) {
   let stopRequested = false;
 
   function cleanupRunArtifacts() {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    cleanupWorkspace(tmpDir);
   }
 
   function terminateRun(reason = "Run stopped by client") {
@@ -630,49 +703,47 @@ async function handleGenerateTests(req, res) {
 
   console.log(`[Generate Tests] Page: ${pageData.meta?.url} | Type: ${pageData.meta?.pageType} | Exploratory: ${!!exploratoryMode}`);
 
-  const prompt = buildTestCasePrompt(pageData, exploratoryMode);
+  const pageFingerprint = buildPageFingerprint(pageData);
+  const grounded = buildGroundedTestCaseCandidates(pageData, exploratoryMode);
+  const prompt = buildTestCasePrompt(pageData, grounded.candidates, exploratoryMode);
   const result = await callAI(apiKey, prompt, 4096,
-    "You are an expert QA automation engineer. Generate precise, actionable test cases from web page analysis data. Respond with valid JSON only — no markdown, no explanation.");
+    "You are an expert QA automation engineer. Polish only the provided grounded candidates. Respond with valid JSON only — no markdown, no explanation.");
 
-  if (!result.success) return jsonResponse(res, 502, { error: result.error });
-
-  let testCases;
-  try {
-    const clean = sanitizeAiJson(result.text);
-    const parsed = JSON.parse(clean);
-    testCases = parsed.testCases || parsed;
-    if (!Array.isArray(testCases)) throw new Error("Expected array of test cases");
-  } catch (err) {
-    console.error("[Parse Error]", err.message, "\nRaw:", result.text.slice(0, 200));
-    return jsonResponse(res, 502, { error: "Failed to parse AI response", detail: err.message });
+  let aiCases = [];
+  if (!result.success) {
+    console.warn(`[Generate Tests] AI polish failed, falling back to grounded candidates: ${result.error}`);
+  } else {
+    try {
+      const clean = sanitizeAiJson(result.text);
+      const parsed = JSON.parse(clean);
+      aiCases = parsed.testCases || parsed;
+      if (!Array.isArray(aiCases)) throw new Error("Expected array of test cases");
+    } catch (err) {
+      console.error("[Parse Error]", err.message, "\nRaw:", result.text.slice(0, 200));
+    }
   }
 
-  // Normalise and validate each test case
-  testCases = testCases.map((tc, i) => {
-    const caseKind = normalizeGeneratedCaseKind(tc, "page");
-    const packs = normalizeGeneratedPacks(tc, caseKind);
-    return {
-      id: tc.id || `TC${String(i + 1).padStart(3, "0")}`,
-      title: tc.title || "Untitled test case",
-      category: normalizeGeneratedCategory(tc.category, caseKind, packs),
-      priority: tc.priority || "medium",
-      preconditions: tc.preconditions || "",
-      steps: Array.isArray(tc.steps) ? tc.steps : [],
-      expectedResult: tc.expectedResult || tc.expected_result || "",
-      locators: tc.locators || {},
-      testData: tc.testData || tc.test_data || {},
-      tags: tc.tags || [],
-      approved: tc.approved !== false,
-      caseKind,
-      packs,
-      suite: deriveLegacySuite(caseKind, packs),
-      scope: "page",
-      source: tc.source || "page",
-    };
-  });
+  const finalized = finalizeGeneratedTestCases(pageData, grounded.candidates, aiCases);
+  const qualityReport = result.success
+    ? finalized.qualityReport
+    : {
+        ...finalized.qualityReport,
+        status: "grounded_fallback",
+        warnings: [...(finalized.qualityReport.warnings || []), result.error || "AI polish unavailable; grounded candidates returned."],
+      };
 
-  console.log(`[Generate Tests] ✓ ${testCases.length} test cases generated`);
-  jsonResponse(res, 200, { success: true, testCases, count: testCases.length });
+  console.log(`[Generate Tests] ✓ ${finalized.testCases.length} test cases generated`);
+  jsonResponse(res, 200, {
+    success: true,
+    testCases: finalized.testCases,
+    count: finalized.testCases.length,
+    pageFingerprint,
+    qualityReport,
+    coverageSummary: {
+      ...finalized.coverageSummary,
+      pageFingerprint,
+    },
+  });
 }
 
 // ─── Template-driven files (never AI-generated) ──────────────────────────────
@@ -941,6 +1012,539 @@ function fixGeneratedScripts(scripts, framework) {
   return scripts;
 }
 
+function buildPythonRequirementsContent(includeAccessibility = false, includeVisual = false) {
+  const packages = ["pytest", "selenium", "webdriver-manager"];
+  if (includeAccessibility) packages.push("axe-selenium-python");
+  if (includeVisual) packages.push("pillow");
+  return `${Array.from(new Set(packages)).join("\n")}\n`;
+}
+
+function serializeGeneratedScriptsToFiles(scripts, framework) {
+  const files = [];
+  const push = (entry) => {
+    if (!entry?.filename || !entry?.content) return;
+    files.push({
+      filename: entry.filename,
+      content: entry.content,
+      key: entry.key || null,
+      group: entry.group || null,
+      stepId: entry.stepId || null,
+    });
+  };
+
+  if (framework === "selenium-python" || framework === "playwright-python") {
+    push(scripts.base ? { ...scripts.base, key: "base" } : null);
+    push(scripts.config ? { ...scripts.config, key: "config" } : null);
+    push(scripts.testData ? { ...scripts.testData, key: "testData" } : null);
+    push(scripts.pageObject ? { ...scripts.pageObject, key: "pageObject" } : null);
+    push(scripts.tests ? { ...scripts.tests, key: "tests" } : null);
+    push(scripts.accessibility ? { ...scripts.accessibility, key: "accessibility" } : null);
+    push(scripts.perfTest ? { ...scripts.perfTest, key: "perfTest" } : null);
+    push(scripts.visualTest ? { ...scripts.visualTest, key: "visualTest" } : null);
+    return files;
+  }
+
+  return Object.entries(scripts || {})
+    .filter(([, file]) => file && typeof file === "object" && file.filename && file.content)
+    .map(([key, file]) => ({
+      filename: file.filename,
+      content: file.content,
+      key,
+      group: file.group || null,
+      stepId: file.stepId || null,
+    }));
+}
+
+function listFilesRecursive(rootDir) {
+  const output = [];
+  const visit = (currentDir) => {
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+      } else {
+        output.push(fullPath);
+      }
+    }
+  };
+  visit(rootDir);
+  return output;
+}
+
+function validateSeleniumPythonBundleLayout(files, mode = "page") {
+  const normalized = files.map((file) => normalizeRuntimePath(file.filename));
+  const errors = [];
+  const required = mode === "project-bundle"
+    ? ["base_test.py", "conftest.py", "tests/conftest.py", "pytest.ini", "requirements.txt"]
+    : ["base_test.py", "pytest.ini"];
+
+  required.forEach((target) => {
+    if (!normalized.includes(target)) {
+      errors.push(`Missing required file: ${target}`);
+    }
+  });
+
+  const pageFiles = normalized.filter((name) => name.startsWith("pages/") && name.endsWith(".py"));
+  const testFiles = normalized.filter((name) => name.startsWith("tests/") && /test_.*\.py$/.test(path.basename(name)));
+  if (!pageFiles.length) errors.push("Missing generated page object file under pages/.");
+  if (!testFiles.length) errors.push("Missing generated test file under tests/.");
+  if (mode === "project-bundle" && !normalized.some((name) => name.startsWith("data/") && name.endsWith(".py"))) {
+    errors.push("Missing generated page test-data file under data/.");
+  }
+
+  return errors;
+}
+
+async function validatePythonSyntaxInWorkspace(tmpDir) {
+  const pythonFiles = listFilesRecursive(tmpDir).filter((file) => file.endsWith(".py"));
+  const errors = [];
+
+  for (const file of pythonFiles) {
+    const result = await runProcess("python3", [
+      "-c",
+      "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())",
+      file,
+    ]);
+
+    if (result.code !== 0) {
+      errors.push(`Syntax validation failed for ${path.relative(tmpDir, file)}: ${(result.stderr || result.stdout || "").trim()}`);
+    }
+  }
+
+  return errors;
+}
+
+async function validateGeneratedBundle(files, framework, generationMode = "page") {
+  const validation = {
+    status: "passed",
+    errors: [],
+    repairAttempts: 0,
+    generationMode,
+  };
+
+  if (framework !== "selenium-python") {
+    return validation;
+  }
+
+  validation.errors.push(...validateSeleniumPythonBundleLayout(files, generationMode));
+  if (validation.errors.length) {
+    validation.status = "failed";
+    return validation;
+  }
+
+  const tmpDir = await writeRuntimeWorkspace(files, framework, { headless: true });
+  try {
+    const syntaxErrors = await validatePythonSyntaxInWorkspace(tmpDir);
+    validation.errors.push(...syntaxErrors);
+    if (validation.errors.length) {
+      validation.status = "failed";
+      return validation;
+    }
+
+    const collectResult = await runProcess("python3", ["-m", "pytest", "--collect-only", "-q"], { cwd: tmpDir });
+    if (collectResult.code !== 0) {
+      validation.errors.push(`Pytest collection failed: ${(collectResult.stderr || collectResult.stdout || "").trim()}`);
+      validation.status = "failed";
+      return validation;
+    }
+  } finally {
+    cleanupWorkspace(tmpDir);
+  }
+
+  return validation;
+}
+
+function buildProjectBundleBaseFiles(projectName, baseUrl) {
+  return [
+    {
+      filename: "base_test.py",
+      key: "base",
+      content: `from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+
+_ACTIVE_DRIVER = None
+
+
+def set_active_driver(driver):
+    global _ACTIVE_DRIVER
+    _ACTIVE_DRIVER = driver
+    return driver
+
+
+def get_active_driver():
+    return _ACTIVE_DRIVER
+
+
+def resolve_driver(driver=None):
+    return driver or _ACTIVE_DRIVER
+
+
+class DeferredDriverProxy:
+    def _resolve(self):
+        driver = resolve_driver()
+        if driver is None:
+            raise RuntimeError("QA Deck could not resolve an active Selenium driver for this generated file.")
+        return driver
+
+    def __getattr__(self, name):
+        return getattr(self._resolve(), name)
+
+
+class LazyElement:
+    def __init__(self, driver_ref, by, value):
+        self._driver_ref = driver_ref
+        self._by = by
+        self._value = value
+
+    def _resolve(self):
+        driver = resolve_driver(self._driver_ref() if callable(self._driver_ref) else self._driver_ref)
+        if driver is None:
+            raise RuntimeError("QA Deck could not resolve an active Selenium driver for this page object.")
+        return WebDriverWait(driver, 10).until(EC.presence_of_element_located((self._by, self._value)))
+
+    def __getattr__(self, name):
+        return getattr(self._resolve(), name)
+
+
+class LazyElements:
+    def __init__(self, driver_ref, by, value):
+        self._driver_ref = driver_ref
+        self._by = by
+        self._value = value
+
+    def _resolve(self):
+        driver = resolve_driver(self._driver_ref() if callable(self._driver_ref) else self._driver_ref)
+        if driver is None:
+            raise RuntimeError("QA Deck could not resolve an active Selenium driver for this page object.")
+        return WebDriverWait(driver, 10).until(lambda d: d.find_elements(self._by, self._value))
+
+    def __iter__(self):
+        return iter(self._resolve())
+
+    def __getitem__(self, item):
+        return self._resolve()[item]
+
+    def __len__(self):
+        return len(self._resolve())
+
+
+class BaseTest:
+    """Shared Selenium setup for the ${projectName || "QA Deck"} project bundle."""
+
+    def __init__(self, driver=None):
+        self.driver = resolve_driver(driver)
+        self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+    def setup_method(self):
+        options = Options()
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        self.driver = set_active_driver(webdriver.Chrome(options=options))
+        self.driver.maximize_window()
+        self.wait = WebDriverWait(self.driver, 10)
+        if ${baseUrl ? "True" : "False"}:
+            self.driver.get(${JSON.stringify(baseUrl || "")})
+
+    def teardown_method(self):
+        if getattr(self, "driver", None):
+            self.driver.quit()
+        set_active_driver(None)
+`,
+    },
+    { filename: "conftest.py", key: "config", content: buildRuntimePythonConftest() },
+    { filename: "tests/conftest.py", key: "config", content: buildRuntimePythonConftest() },
+    { filename: "pytest.ini", key: "config", content: `[pytest]\naddopts = -v --tb=short --junit-xml=report.xml\ntestpaths = tests\n` },
+    { filename: "requirements.txt", key: "requirements", content: buildPythonRequirementsContent() },
+    { filename: "pages/__init__.py", key: "package", content: "" },
+    { filename: "data/__init__.py", key: "package", content: "" },
+    { filename: "tests/__init__.py", key: "package", content: "" },
+  ];
+}
+
+function buildProjectBundleReadme(projectName, pack, pageReports) {
+  return `# ${projectName || "QA Deck Project"} Selenium Python Bundle
+
+Pack: ${pack}
+Included pages:
+${pageReports.map((page) => `- ${page.pageLabel} (${page.caseCount} approved cases)`).join("\n")}
+
+Run locally:
+1. python3 -m venv .venv
+2. source .venv/bin/activate
+3. pip install -r requirements.txt
+4. python3 -m pytest -v
+`;
+}
+
+async function createZipPayload(files, framework, zipBaseName) {
+  const tmpDir = await writeRuntimeWorkspace(files, framework, { headless: true });
+  const zipFilename = `${slugifyLabel(zipBaseName || "qa-deck-bundle", "qa-deck-bundle")}.zip`;
+  const zipPath = path.join(os.tmpdir(), `${crypto.randomUUID()}-${zipFilename}`);
+
+  try {
+    const result = await runProcess("/usr/bin/zip", ["-qr", zipPath, "."], { cwd: tmpDir });
+    if (result.code !== 0 || !fs.existsSync(zipPath)) {
+      throw new Error(result.stderr || result.stdout || "zip command failed");
+    }
+    return {
+      filename: zipFilename,
+      contentBase64: fs.readFileSync(zipPath).toString("base64"),
+    };
+  } finally {
+    try {
+      if (fs.existsSync(zipPath)) fs.rmSync(zipPath, { force: true });
+    } catch (_) {}
+    cleanupWorkspace(tmpDir);
+  }
+}
+
+function ensureTextImports(content, imports) {
+  if (!content) return content;
+  const existing = String(content);
+  const missing = imports.filter((line) => line && !existing.includes(line));
+  if (!missing.length) return content;
+
+  const lines = existing.split("\n");
+  let insertAt = 0;
+  while (insertAt < lines.length && !lines[insertAt].trim()) insertAt += 1;
+  while (insertAt < lines.length && (/^(from|import)\s+/.test(lines[insertAt].trim()) || !lines[insertAt].trim())) {
+    insertAt += 1;
+  }
+  lines.splice(insertAt, 0, ...missing);
+  return lines.join("\n");
+}
+
+function buildSeleniumPythonGenerationPaths(pageData, overrides = {}) {
+  const pageType = pageData?.meta?.pageType || "page";
+  const pageSlug = slugifyIdentifier(pageType, "page");
+  const pageObjectFilename = overrides.pageObjectFilename || `${pageSlug}_page.py`;
+  const testDataFilename = overrides.testDataFilename || `${pageSlug}_test_data.py`;
+  const testsFilename = overrides.testsFilename || `test_${pageSlug}.py`;
+  const pageObjectPath = overrides.pageObjectPath || `pages/${pageObjectFilename}`;
+  const testDataPath = overrides.testDataPath || `data/${testDataFilename}`;
+  const testsPath = overrides.testsPath || `tests/${testsFilename}`;
+  const pageObjectModule = stripFileExtension(path.basename(pageObjectFilename));
+  const testDataModule = stripFileExtension(path.basename(testDataFilename));
+  const pageObjectClass = `${toPascalCase(pageType)}Page`;
+  return {
+    pageSlug,
+    pageObjectClass,
+    pageObjectFilename,
+    testDataFilename,
+    testsFilename,
+    pageObjectPath,
+    testDataPath,
+    testsPath,
+    pageObjectImport: overrides.pageObjectImport || `from pages.${pageObjectModule} import ${pageObjectClass}`,
+    testDataImport: overrides.testDataImport || `from data.${testDataModule} import TEST_DATA`,
+  };
+}
+
+function buildExplicitSeleniumPythonFiles(pageScripts, generationPaths, options = {}) {
+  const files = [];
+  if (options.includeRuntimeTemplates !== false) {
+    if (pageScripts.base) files.push({ ...pageScripts.base, key: "base" });
+    if (pageScripts.config) files.push({ ...pageScripts.config, key: "config" });
+  }
+
+  files.push(
+    {
+      filename: generationPaths.pageObjectPath,
+      content: pageScripts.pageObject.content,
+      key: "pageObject",
+      group: options.group || "page",
+      stepId: null,
+    },
+    {
+      filename: generationPaths.testDataPath,
+      content: pageScripts.testData.content,
+      key: "testData",
+      group: options.group || "page",
+      stepId: null,
+    },
+    {
+      filename: generationPaths.testsPath,
+      content: pageScripts.tests.content,
+      key: "tests",
+      group: options.group || "page",
+      stepId: null,
+    }
+  );
+
+  if (options.includeRuntimeTemplates !== false) {
+    if (pageScripts.accessibility) files.push({ ...pageScripts.accessibility, key: "accessibility", group: options.group || "page" });
+    if (pageScripts.perfTest) files.push({ ...pageScripts.perfTest, key: "perfTest", group: options.group || "page" });
+    if (pageScripts.visualTest) files.push({ ...pageScripts.visualTest, key: "visualTest", group: options.group || "page" });
+  }
+
+  return files;
+}
+
+async function generateValidatedPageScripts(options) {
+  const {
+    testCases,
+    pageData,
+    framework,
+    apiKey,
+    customAssertions,
+    networkCalls,
+    visualTesting,
+    perfAssertions,
+    datasetsMap,
+    generationMode = "page",
+    pack = "page",
+    outputPaths = {},
+    includeRuntimeTemplates = true,
+    maxRepairAttempts = 2,
+    baseUrl,
+  } = options;
+
+  const generationPaths = buildSeleniumPythonGenerationPaths(pageData, outputPaths);
+  const pageObject = generatePageObject(pageData, framework);
+  pageObject.filename = generationPaths.pageObjectPath;
+  const testData = generateTestData(testCases, pageData, framework, { filename: generationPaths.testDataPath });
+  const pageObjectApi = _extractApiSummary(pageObject.content, framework);
+
+  let lastValidation = {
+    status: "failed",
+    errors: [],
+    repairAttempts: 0,
+    generationMode,
+  };
+  let lastScripts = null;
+  let lastFiles = [];
+  let lastPromptError = "";
+
+  for (let attempt = 0; attempt <= maxRepairAttempts; attempt += 1) {
+    const prompt = buildTestsOnlyPrompt(
+      testCases,
+      pageData,
+      framework,
+      pageObject.filename,
+      pageObjectApi,
+      networkCalls,
+      customAssertions,
+      datasetsMap,
+      {
+        outputFilename: generationPaths.testsFilename,
+        pageObjectImport: generationPaths.pageObjectImport,
+        testDataImport: generationPaths.testDataImport,
+        repairErrors: attempt > 0 ? lastValidation.errors : [],
+      }
+    );
+
+    const result = await callAI(
+      apiKey,
+      prompt,
+      4096,
+      "You are a senior QA automation engineer. Write Selenium Python pytest modules using the provided page object. Respond ONLY with valid JSON — no markdown fences, no extra text."
+    );
+
+    if (!result.success) {
+      lastPromptError = result.error || "Script generation failed";
+      lastValidation = {
+        status: "failed",
+        errors: [lastPromptError],
+        repairAttempts: attempt,
+        generationMode,
+      };
+      continue;
+    }
+
+    let testsFile;
+    try {
+      const clean = sanitizeAiJson(result.text);
+      const aiPart = JSON.parse(clean);
+      if (!aiPart.tests?.filename || !aiPart.tests?.content) throw new Error("Missing tests file in AI response");
+      testsFile = {
+        filename: generationPaths.testsPath,
+        content: aiPart.tests.content,
+      };
+    } catch (err) {
+      lastPromptError = err instanceof Error ? err.message : "Failed to parse script response";
+      lastValidation = {
+        status: "failed",
+        errors: [lastPromptError],
+        repairAttempts: attempt,
+        generationMode,
+      };
+      continue;
+    }
+
+    const requiredImports = [
+      "from base_test import BaseTest, set_active_driver",
+      generationPaths.pageObjectImport,
+      generationPaths.testDataImport,
+      "from selenium.webdriver.common.by import By",
+      "from selenium.webdriver.support import expected_conditions as EC",
+      "from selenium.webdriver.support.ui import WebDriverWait",
+      "from selenium.common.exceptions import TimeoutException, NoSuchElementException",
+    ];
+
+    let scripts = { pageObject, testData, tests: testsFile };
+    scripts.tests = {
+      ...scripts.tests,
+      content: ensureTextImports(scripts.tests.content, requiredImports),
+    };
+
+    if (includeRuntimeTemplates) {
+      scripts = injectTemplateFiles(scripts, framework, pageData);
+      if (pageData?.accessibility) {
+        scripts.accessibility = buildAccessibilityScript(pageData, framework);
+      }
+      if (perfAssertions && pageData?.performance) {
+        scripts.perfTest = buildPerformanceScript(pageData, framework);
+      }
+      if (visualTesting) {
+        scripts.visualTest = buildVisualRegressionScript(pageData, framework);
+      }
+      scripts = fixGeneratedScripts(scripts, framework);
+    }
+
+    const files = buildExplicitSeleniumPythonFiles(scripts, generationPaths, {
+      includeRuntimeTemplates,
+      group: pack,
+    });
+
+    const validation = await validateGeneratedBundle(files, framework, generationMode);
+    validation.repairAttempts = attempt;
+    lastValidation = validation;
+    lastScripts = scripts;
+    lastFiles = files;
+
+    if (validation.status === "passed") {
+      return {
+        success: true,
+        scripts,
+        files,
+        validation,
+        generationMode,
+        generationPaths,
+      };
+    }
+  }
+
+  return {
+    success: false,
+    scripts: lastScripts,
+    files: lastFiles,
+    validation: lastValidation.errors.length
+      ? lastValidation
+      : {
+          status: "failed",
+          errors: [lastPromptError || "Validation failed after repair attempts."],
+          repairAttempts: maxRepairAttempts,
+          generationMode,
+        },
+    generationMode,
+    generationPaths,
+  };
+}
+
 async function handleGenerateScript(req, res) {
   const body = await readBody(req);
   const { testCases, pageData, framework, format, customAssertions, networkCalls, visualTesting, perfAssertions, environments, datasetsMap, apiKey } = body;
@@ -956,12 +1560,47 @@ async function handleGenerateScript(req, res) {
 
   console.log(`[Generate Script] Framework: ${framework} | Test cases: ${testCases.length}${customAssertions?.length ? ` | Custom assertions: ${customAssertions.length}` : ""}${networkCalls?.length ? ` | Network assertions: ${networkCalls.length}` : ""}`);
 
-  // Step 1: Build page object + test data deterministically — no AI, no hallucinated locators
+  if (framework === "selenium-python") {
+    const generated = await generateValidatedPageScripts({
+      testCases,
+      pageData,
+      framework,
+      apiKey,
+      customAssertions,
+      networkCalls,
+      visualTesting,
+      perfAssertions,
+      datasetsMap,
+      generationMode: "page",
+      pack: "page",
+      includeRuntimeTemplates: true,
+    });
+
+    if (!generated.success) {
+      return jsonResponse(res, 422, {
+        success: false,
+        error: "Generated Selenium Python bundle failed validation",
+        validation: generated.validation,
+        generationMode: "page",
+        files: generated.files,
+      });
+    }
+
+    console.log(`[Generate Script] ✓ ${generated.files.length} Selenium Python files generated and validated`);
+    return jsonResponse(res, 200, {
+      success: true,
+      scripts: generated.scripts,
+      files: generated.files,
+      validation: generated.validation,
+      generationMode: "page",
+    });
+  }
+
+  // Non-golden-path frameworks keep the existing behavior for now.
   const pageObject = generatePageObject(pageData, framework);
   const testData = generateTestData(testCases, pageData, framework);
   console.log(`[Generate Script] ✓ Page object generated deterministically (${pageObject.filename}, ${pageObject.content.length} chars)`);
 
-  // Step 2: Ask AI only for test methods, giving it the page object API it must use
   const pageObjectApi = _extractApiSummary(pageObject.content, framework);
   const prompt = buildTestsOnlyPrompt(testCases, pageData, framework, pageObject.filename, pageObjectApi, networkCalls, customAssertions, datasetsMap);
   const result = await callAI(apiKey, prompt, 4096,
@@ -980,38 +1619,180 @@ async function handleGenerateScript(req, res) {
     return jsonResponse(res, 502, { error: "Failed to parse script response", detail: err.message });
   }
 
-  // Inject template-driven files — these never come from AI to avoid import/setup bugs
   scripts = injectTemplateFiles(scripts, framework, pageData);
-
-  // Post-process: fix any remaining missing imports the AI forgot
   scripts = fixGeneratedScripts(scripts, framework);
 
-  // Generate 6th file — accessibility tests (template-based, no AI call)
   if (pageData?.accessibility) {
     scripts.accessibility = buildAccessibilityScript(pageData, framework);
-    console.log(`[Generate Script] ✓ Accessibility test file added (${scripts.accessibility.filename})`);
   }
-
-  // Generate performance assertion tests (opt-in)
   if (perfAssertions && pageData?.performance) {
     scripts.perfTest = buildPerformanceScript(pageData, framework);
-    console.log(`[Generate Script] ✓ Performance test file added (${scripts.perfTest.filename})`);
   }
-
-  // Generate 7th file — visual regression tests (opt-in)
   if (visualTesting) {
     scripts.visualTest = buildVisualRegressionScript(pageData, framework);
-    console.log(`[Generate Script] ✓ Visual regression test file added (${scripts.visualTest.filename})`);
   }
-
-  // Generate environment config files (opt-in)
   if (environments?.length > 0) {
     scripts.envConfigs = buildEnvironmentConfigs(environments, pageData, framework);
-    console.log(`[Generate Script] ✓ ${environments.length} environment config files added`);
   }
 
+  const files = serializeGeneratedScriptsToFiles(scripts, framework);
+  const validation = await validateGeneratedBundle(files, framework, "page");
   console.log(`[Generate Script] ✓ ${Object.keys(scripts).length} files generated`);
-  jsonResponse(res, 200, { success: true, scripts });
+  jsonResponse(res, 200, { success: true, scripts, files, validation, generationMode: "page" });
+}
+
+async function handleGenerateProjectBundle(req, res) {
+  const body = await readBody(req);
+  const { framework, pack = "page", projectName, pages, apiKey } = body;
+
+  if (!framework) return jsonResponse(res, 400, { error: "framework is required" });
+  if (framework !== "selenium-python") {
+    return jsonResponse(res, 400, { error: "Project bundle generation is currently stabilized for Selenium Python only." });
+  }
+  if (!apiKey) return jsonResponse(res, 400, { error: "apiKey is required" });
+  if (!Array.isArray(pages) || !pages.length) return jsonResponse(res, 400, { error: "pages[] is required" });
+
+  const selectedPack = ["page", "smoke", "regression", "e2e"].includes(String(pack)) ? String(pack) : "page";
+  const sharedFiles = buildProjectBundleBaseFiles(projectName || "QA Deck Project", body.baseUrl || "");
+  const pageReports = [];
+  const bundleFiles = [...sharedFiles];
+  const includedCaseIds = [];
+  const includedPageIds = [];
+  const pageFingerprints = {};
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const entry = pages[index] || {};
+    const pageData = entry.scan || entry.pageData || entry.scanArtifact || null;
+    const pageId = String(entry.pageId || entry.id || `page-${index + 1}`);
+    const pageLabel = String(entry.pageLabel || entry.meta?.pageLabel || pageData?.meta?.pageType || `Page ${index + 1}`);
+    const pageSlug = slugifyIdentifier(pageLabel, `page_${index + 1}`);
+    const existingFingerprint = entry.pageFingerprint || entry.existingPageFingerprint || pageData?.meta?.pageFingerprint || null;
+    const computedFingerprint = pageData ? buildPageFingerprint(pageData) : null;
+    const approvedCases = Array.isArray(entry.testCases)
+      ? entry.testCases.filter((tc) => {
+          if (!tc || tc.approved === false) return false;
+          if (selectedPack === "page") return tc.caseKind !== "flow";
+          return Array.isArray(tc.packs) && tc.packs.includes(selectedPack);
+        })
+      : [];
+
+    pageReports.push({
+      pageId,
+      pageLabel,
+      caseCount: approvedCases.length,
+      includedCaseIds: approvedCases.map((tc) => tc.id).filter(Boolean),
+      existingPageFingerprint: existingFingerprint,
+      pageFingerprint: computedFingerprint,
+      fingerprintMatches: !existingFingerprint || !computedFingerprint || existingFingerprint === computedFingerprint,
+      validation: {
+        status: approvedCases.length && pageData ? "pending" : "blocked",
+        errors: approvedCases.length ? [] : ["No approved test cases for the selected pack on this page."],
+        repairAttempts: 0,
+        generationMode: "project-bundle",
+      },
+    });
+
+    if (!pageData || !approvedCases.length) {
+      continue;
+    }
+
+    const generated = await generateValidatedPageScripts({
+      testCases: approvedCases,
+      pageData,
+      framework,
+      apiKey,
+      customAssertions: entry.customAssertions || [],
+      networkCalls: entry.networkCalls || [],
+      datasetsMap: entry.datasetsMap || {},
+      generationMode: "project-bundle",
+      pack: selectedPack,
+      includeRuntimeTemplates: false,
+      outputPaths: {
+        pageObjectFilename: `${pageSlug}_page.py`,
+        testDataFilename: `${pageSlug}_test_data.py`,
+        testsFilename: `test_${pageSlug}.py`,
+        pageObjectPath: `pages/${pageSlug}_page.py`,
+        testDataPath: `data/${pageSlug}_test_data.py`,
+        testsPath: `tests/test_${pageSlug}.py`,
+      },
+      baseUrl: body.baseUrl || pageData?.meta?.url || "",
+    });
+
+    const report = pageReports[pageReports.length - 1];
+    report.validation = generated.validation;
+    report.generationStatus = generated.validation.status === "passed" ? "ready" : "validation_failed";
+
+    if (generated.files?.length) {
+      bundleFiles.push(...generated.files);
+    }
+    if (generated.validation.status === "passed") {
+      includedPageIds.push(pageId);
+      includedCaseIds.push(...approvedCases.map((tc) => tc.id).filter(Boolean));
+      if (computedFingerprint) {
+        pageFingerprints[pageId] = computedFingerprint;
+      }
+    }
+  }
+
+  if (!includedPageIds.length) {
+    return jsonResponse(res, 422, {
+      success: false,
+      error: "Blocked by missing approved cases or failed page bundle validation.",
+      validation: {
+        status: "blocked",
+        errors: ["No saved pages produced a valid Selenium Python bundle for the selected pack."],
+        repairAttempts: 0,
+        generationMode: "project-bundle",
+      },
+      pageReports,
+      bundleSummary: {
+        projectName: projectName || "QA Deck Project",
+        pack: selectedPack,
+        includedPageCount: 0,
+        includedCaseCount: 0,
+        ready: false,
+      },
+    });
+  }
+
+  bundleFiles.push({
+    filename: "README.md",
+    content: buildProjectBundleReadme(projectName || "QA Deck Project", selectedPack, pageReports.filter((page) => page.caseCount > 0)),
+    key: "readme",
+    group: selectedPack,
+    stepId: null,
+  });
+
+  const validation = await validateGeneratedBundle(bundleFiles, framework, "project-bundle");
+  validation.repairAttempts = Math.max(0, ...pageReports.map((page) => Number(page.validation?.repairAttempts || 0)));
+
+  let download = null;
+  if (validation.status === "passed") {
+    download = await createZipPayload(bundleFiles, framework, `${projectName || "qa-deck-project"}-${selectedPack}`);
+  }
+
+  const bundleSummary = {
+    projectName: projectName || "QA Deck Project",
+    pack: selectedPack,
+    includedPageCount: includedPageIds.length,
+    includedCaseCount: includedCaseIds.length,
+    totalFiles: bundleFiles.length,
+    ready: validation.status === "passed",
+  };
+
+  return jsonResponse(res, 200, {
+    success: validation.status === "passed",
+    files: bundleFiles,
+    validation,
+    pageReports,
+    bundleSummary,
+    generationMode: "project-bundle",
+    download,
+    selectedPack,
+    includedPageIds,
+    includedCaseIds,
+    pageFingerprints,
+  });
 }
 
 async function handleGenerateJourneyTests(req, res) {
@@ -1460,106 +2241,758 @@ function callMetaLlama(apiKey, prompt, system, maxTokens) {
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
-function buildTestCasePrompt(pageData, exploratoryMode = false) {
-  const { meta, forms, buttons, links, tables, pageStructure, navigation, modals, alerts } = pageData;
+function buildPageFingerprint(pageData) {
+  const meta = pageData?.meta || {};
+  const forms = Array.isArray(pageData?.forms) ? pageData.forms : [];
+  const buttons = Array.isArray(pageData?.buttons) ? pageData.buttons : [];
+  const links = Array.isArray(pageData?.links) ? pageData.links : [];
+  const tables = Array.isArray(pageData?.tables) ? pageData.tables : [];
+  const inputs = Array.isArray(pageData?.inputs) ? pageData.inputs : [];
 
-  // Slim down for token efficiency
-  const slim = {
+  return hashPayload({
+    url: meta.url || "",
+    title: meta.title || "",
+    pageType: meta.pageType || "",
+    forms: forms.map((form) => ({
+      purpose: form.purpose || "",
+      locator: form.locator || "",
+      fieldCount: Number(form.fieldCount || 0),
+      hasRequired: !!form.hasRequired,
+      fields: Array.isArray(form.fields)
+        ? form.fields.map((field) => ({
+            label: field.label || field.name || field.placeholder || "",
+            type: field.type || field.tag || "",
+            required: !!field.required,
+            locator: field.locator || "",
+          }))
+        : [],
+    })),
+    buttons: buttons.slice(0, 20).map((button) => ({
+      text: button.text || button.ariaLabel || "",
+      action: button.action || "",
+      disabled: !!button.disabled,
+      locator: button.locator || "",
+    })),
+    links: links
+      .filter((link) => !link.isExternal)
+      .slice(0, 20)
+      .map((link) => ({
+        text: link.text || link.ariaLabel || "",
+        path: link.path || "",
+        locator: link.locator || "",
+      })),
+    inputs: inputs.slice(0, 20).map((input) => ({
+      label: input.label || input.name || input.placeholder || "",
+      type: input.type || input.tag || "",
+      required: !!input.required,
+      locator: input.locator || "",
+    })),
+    tables: tables.map((table) => ({
+      locator: table.locator || "",
+      headers: Array.isArray(table.headers) ? table.headers.slice(0, 8) : [],
+      hasSorting: !!table.hasSorting,
+      hasPagination: !!table.hasPagination,
+      hasSearch: !!table.hasSearch,
+    })),
+  });
+}
+
+function deriveFieldTestValue(field, variant = "valid") {
+  const type = String(field?.type || field?.tag || "").toLowerCase();
+  const label = String(field?.label || field?.name || field?.placeholder || "value");
+  const key = slugifyIdentifier(label, "value");
+
+  const defaults = {
+    valid: {
+      email: "valid.user@example.com",
+      password: "TestPassword123!",
+      search: "wireless mouse",
+      tel: "+1-555-000-1234",
+      url: "https://example.com",
+      number: 42,
+      date: "2026-04-05",
+      text: `${label} sample`,
+      textarea: `${label} sample`,
+      select: field?.options?.[1]?.value || field?.options?.[1]?.text || field?.options?.[0]?.value || "Option 1",
+    },
+    invalid: {
+      email: "not-an-email",
+      password: "123",
+      search: "",
+      tel: "abc",
+      url: "notaurl",
+      number: "not-a-number",
+      date: "13/40/2026",
+      text: "   ",
+      textarea: "",
+      select: "__INVALID__",
+    },
+  };
+
+  const normalizedType =
+    type === "textarea" ? "textarea" :
+    type === "select" ? "select" :
+    ["email", "password", "search", "tel", "url", "number", "date"].includes(type) ? type :
+    "text";
+
+  return { key, value: defaults[variant][normalizedType] };
+}
+
+function collectConfirmedLocators(pageData) {
+  const entries = [];
+  const pushEntry = (selector, label, kind) => {
+    if (!selector) return;
+    entries.push({
+      selector: String(selector),
+      label: String(label || kind || "element"),
+      kind: kind || "element",
+    });
+  };
+
+  for (const form of pageData?.forms || []) {
+    pushEntry(form.locator, form.purpose || "form", "form");
+    for (const field of form.fields || []) {
+      pushEntry(field.locator, field.label || field.name || field.placeholder || field.type, "field");
+    }
+    if (form.submitButton) {
+      pushEntry(form.submitButton.locator, form.submitButton.text || form.submitButton.ariaLabel || "submit button", "button");
+    }
+  }
+
+  for (const input of pageData?.inputs || []) {
+    pushEntry(input.locator, input.label || input.name || input.placeholder || input.type, "field");
+  }
+  for (const button of pageData?.buttons || []) {
+    pushEntry(button.locator, button.text || button.ariaLabel || button.action || "button", "button");
+  }
+  for (const link of pageData?.links || []) {
+    pushEntry(link.locator, link.text || link.ariaLabel || link.path || "link", "link");
+  }
+  for (const table of pageData?.tables || []) {
+    pushEntry(table.locator, table.purpose || "table", "table");
+  }
+  for (const alert of pageData?.alerts || []) {
+    pushEntry(alert.locator, alert.text || alert.type || "alert", "alert");
+  }
+
+  return entries;
+}
+
+function buildGroundedCandidate(id, payload, meta = {}) {
+  return {
+    id,
+    caseKind: "page",
+    scope: "page",
+    source: "page",
+    approved: true,
+    priority: payload.priority || "medium",
+    category: payload.category || "functional",
+    packs: normalizePackMembership("page", payload.packs || []),
+    title: payload.title || "Grounded test case",
+    preconditions: payload.preconditions || "",
+    steps: Array.isArray(payload.steps) ? payload.steps : [],
+    expectedResult: payload.expectedResult || "",
+    locators: payload.locators || {},
+    testData: payload.testData || {},
+    tags: payload.tags || [],
+    __qadeckMeta: meta,
+  };
+}
+
+function sanitizeGroundedCandidate(candidate) {
+  const { __qadeckMeta, ...rest } = candidate;
+  return rest;
+}
+
+function buildGroundedTestCaseCandidates(pageData, exploratoryMode = false) {
+  const meta = pageData?.meta || {};
+  const url = meta.url || "https://example.com";
+  const pageType = meta.pageType || "page";
+  const forms = Array.isArray(pageData?.forms) ? pageData.forms : [];
+  const buttons = Array.isArray(pageData?.buttons) ? pageData.buttons : [];
+  const links = Array.isArray(pageData?.links) ? pageData.links.filter((link) => !link.isExternal) : [];
+  const tables = Array.isArray(pageData?.tables) ? pageData.tables : [];
+  const alerts = Array.isArray(pageData?.alerts) ? pageData.alerts : [];
+  const candidates = [];
+  let sequence = 1;
+
+  const nextId = () => `TC${String(sequence++).padStart(3, "0")}`;
+  const pushCandidate = (candidate) => {
+    candidates.push(candidate);
+  };
+
+  const firstForm = forms[0] || null;
+  const submitButton = firstForm?.submitButton || buttons.find((button) => button.action === "submit" || button.type === "submit") || null;
+  const requiredFields = (firstForm?.fields || []).filter((field) => field.required);
+
+  if (!exploratoryMode) {
+    pushCandidate(buildGroundedCandidate(nextId(), {
+      title: `Verify ${pageType} page loads successfully`,
+      category: "functional",
+      priority: "high",
+      packs: ["smoke", "regression"],
+      preconditions: `The user can open ${url}.`,
+      steps: [
+        `1. Navigate to ${url}.`,
+        `2. Wait for the main ${pageType} content to render.`,
+        `3. Verify the primary interactive elements are visible and usable.`,
+      ],
+      expectedResult: `The ${pageType} page loads without client-side errors and the main UI is interactive.`,
+      locators: submitButton?.locator ? { primary_action: submitButton.locator } : {},
+      tags: [pageType, "page-load"],
+    }, { coverage: "page_load", polarity: "positive" }));
+  }
+
+  if (firstForm) {
+    const positiveData = {};
+    const negativeData = {};
+    const happyLocators = {};
+
+    for (const field of firstForm.fields || []) {
+      const valid = deriveFieldTestValue(field, "valid");
+      positiveData[valid.key] = valid.value;
+      happyLocators[slugifyIdentifier(field.label || field.name || field.placeholder || field.type, "field")] = field.locator;
+    }
+    if (submitButton?.locator) {
+      happyLocators.submit_button = submitButton.locator;
+    }
+
+    if (!exploratoryMode) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify ${firstForm.purpose || pageType} form accepts valid input`,
+        category: "functional",
+        priority: "high",
+        packs: ["smoke", "regression"],
+        preconditions: `The ${firstForm.purpose || pageType} form is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Enter valid values into the visible form fields.`,
+          submitButton ? `3. Click the ${submitButton.text || submitButton.ariaLabel || "submit"} button.` : "3. Submit the form.",
+          `4. Verify the form completes the expected ${firstForm.purpose || pageType} action.`,
+        ],
+        expectedResult: `The form accepts valid input and the user sees the expected success, navigation, or state change.`,
+        locators: happyLocators,
+        testData: positiveData,
+        tags: [pageType, firstForm.purpose || "form", "happy-path"],
+      }, { coverage: "happy_path", polarity: "positive", formPurpose: firstForm.purpose || "form" }));
+    }
+
+    if (requiredFields.length > 0) {
+      const requiredLocators = {};
+      requiredFields.forEach((field) => {
+        requiredLocators[slugifyIdentifier(field.label || field.name || field.placeholder || field.type, "required_field")] = field.locator;
+      });
+      if (submitButton?.locator) requiredLocators.submit_button = submitButton.locator;
+
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify required ${firstForm.purpose || pageType} fields block submission when empty`,
+        category: "negative",
+        priority: "high",
+        packs: ["regression"],
+        preconditions: `The ${firstForm.purpose || pageType} form is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Leave the required form fields empty.`,
+          submitButton ? `3. Attempt to submit the form with ${submitButton.text || submitButton.ariaLabel || "the submit button"}.` : "3. Attempt to submit the form.",
+          "4. Observe the validation state for the required fields.",
+        ],
+        expectedResult: "Submission is blocked and the required fields show a clear validation state or message.",
+        locators: requiredLocators,
+        tags: [pageType, firstForm.purpose || "form", "required-validation"],
+      }, { coverage: "required_validation", polarity: "negative", formPurpose: firstForm.purpose || "form" }));
+    }
+
+    const invalidField = (firstForm.fields || []).find((field) =>
+      ["email", "number", "url", "tel", "password", "search", "date"].includes(String(field.type || "").toLowerCase())
+    ) || (firstForm.fields || [])[0];
+
+    if (invalidField) {
+      const invalid = deriveFieldTestValue(invalidField, "invalid");
+      negativeData[invalid.key] = invalid.value;
+      const invalidLocators = {
+        [slugifyIdentifier(invalidField.label || invalidField.name || invalidField.placeholder || invalidField.type, "invalid_field")]: invalidField.locator,
+      };
+      if (submitButton?.locator) invalidLocators.submit_button = submitButton.locator;
+
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify invalid ${invalidField.type || "field"} input is rejected`,
+        category: "negative",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: `The ${firstForm.purpose || pageType} form is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Enter an invalid value into the ${invalidField.label || invalidField.name || invalidField.placeholder || invalidField.type} field.`,
+          submitButton ? `3. Attempt to submit with ${submitButton.text || submitButton.ariaLabel || "the submit button"}.` : "3. Attempt to submit the form.",
+          `4. Verify the invalid ${invalidField.type || "field"} value is rejected.`,
+        ],
+        expectedResult: `The invalid ${invalidField.type || "field"} input is rejected and the form stays in a recoverable validation state.`,
+        locators: invalidLocators,
+        testData: negativeData,
+        tags: [pageType, firstForm.purpose || "form", "invalid-input"],
+      }, { coverage: "invalid_format", polarity: "negative", fieldType: invalidField.type || "text" }));
+    }
+
+    if (submitButton) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify ${submitButton.text || submitButton.ariaLabel || "submit"} button state responds correctly`,
+        category: "ui",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: `The ${firstForm.purpose || pageType} form is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          "2. Observe the initial state of the submit action.",
+          "3. Change the form state by entering and clearing values.",
+          "4. Verify the submit action reflects the current validation state.",
+        ],
+        expectedResult: "The submit action remains disabled or blocked when the form is invalid and becomes usable only when the form is ready.",
+        locators: { submit_button: submitButton.locator },
+        tags: [pageType, firstForm.purpose || "form", "button-state"],
+      }, { coverage: "button_state", polarity: "negative" }));
+    }
+  }
+
+  for (const link of links.slice(0, exploratoryMode ? 2 : 3)) {
+    pushCandidate(buildGroundedCandidate(nextId(), {
+      title: `Verify navigation for ${link.text || link.path || "internal link"}`,
+      category: "navigation",
+      priority: exploratoryMode ? "medium" : "high",
+      packs: exploratoryMode ? ["regression"] : ["smoke", "regression"],
+      preconditions: `The current page is loaded at ${url}.`,
+      steps: [
+        `1. Open ${url}.`,
+        `2. Click the ${link.text || link.ariaLabel || link.path || "internal"} link.`,
+        "3. Verify the destination page loads correctly.",
+      ],
+      expectedResult: `The link opens the expected destination (${link.path || link.href || "target page"}) without broken navigation.`,
+      locators: { navigation_link: link.locator },
+      tags: [pageType, "navigation"],
+    }, { coverage: "navigation", polarity: "positive", path: link.path || link.href || "" }));
+  }
+
+  for (const table of tables.slice(0, 1)) {
+    if (table.hasSearch) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify table search filters ${table.purpose || "results"} correctly`,
+        category: "functional",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: "The table data and search input are visible.",
+        steps: [
+          `1. Open ${url}.`,
+          "2. Enter a known query into the table search field.",
+          "3. Observe the filtered table rows.",
+        ],
+        expectedResult: "The table search narrows the visible rows to results that match the query.",
+        locators: table.locator ? { results_table: table.locator } : {},
+        tags: [pageType, "table", "search"],
+      }, { coverage: "table_search", polarity: "positive" }));
+    }
+
+    if (table.hasPagination) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify table pagination updates the visible row set`,
+        category: "functional",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: "The table shows enough data for pagination controls to appear.",
+        steps: [
+          `1. Open ${url}.`,
+          "2. Use the next-page control for the table.",
+          "3. Observe the visible rows after the page change.",
+        ],
+        expectedResult: "Pagination changes the visible row set without breaking the current table layout.",
+        locators: table.locator ? { results_table: table.locator } : {},
+        tags: [pageType, "table", "pagination"],
+      }, { coverage: "table_pagination", polarity: "positive" }));
+    }
+
+    if (table.hasSorting) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify table sorting updates row order consistently`,
+        category: "functional",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: "The table exposes sortable columns.",
+        steps: [
+          `1. Open ${url}.`,
+          "2. Trigger sorting on a sortable column.",
+          "3. Observe the row order before and after the sort.",
+        ],
+        expectedResult: "Sorting updates the row order consistently and does not corrupt the table state.",
+        locators: table.locator ? { results_table: table.locator } : {},
+        tags: [pageType, "table", "sorting"],
+      }, { coverage: "table_sorting", polarity: "positive" }));
+    }
+  }
+
+  if (alerts.length > 0) {
+    const alert = alerts[0];
+    pushCandidate(buildGroundedCandidate(nextId(), {
+      title: `Verify ${alert.type || "alert"} messaging is visible when triggered`,
+      category: "ui",
+      priority: "medium",
+      packs: ["regression"],
+      preconditions: "The page exposes an alert, toast, or inline status message after a user action.",
+      steps: [
+        `1. Open ${url}.`,
+        "2. Perform the user action that should trigger feedback.",
+        "3. Observe the resulting alert or status message.",
+      ],
+      expectedResult: "The page shows a visible status message with the correct tone for the user action.",
+      locators: alert.locator ? { alert_message: alert.locator } : {},
+      tags: [pageType, "alert"],
+    }, { coverage: "alerts", polarity: "positive" }));
+  }
+
+  if (exploratoryMode && firstForm) {
+    pushCandidate(buildGroundedCandidate(nextId(), {
+      title: `Verify rapid repeated submission does not duplicate the ${firstForm.purpose || pageType} action`,
+      category: "boundary",
+      priority: "high",
+      packs: ["regression"],
+      preconditions: `The ${firstForm.purpose || pageType} form is ready to submit.`,
+      steps: [
+        `1. Open ${url}.`,
+        "2. Fill the form with valid data.",
+        "3. Trigger the submit action twice in rapid succession.",
+        "4. Observe the resulting state and any duplicate side effects.",
+      ],
+      expectedResult: "Only one submission is processed and the page protects against duplicate side effects.",
+      locators: submitButton?.locator ? { submit_button: submitButton.locator } : {},
+      tags: [pageType, "duplicate-submit"],
+    }, { coverage: "double_submit", polarity: "negative" }));
+  }
+
+  return {
+    candidates: candidates.slice(0, exploratoryMode ? 12 : 14),
+    coverageAreas: Array.from(new Set(candidates.map((candidate) => candidate.__qadeckMeta?.coverage).filter(Boolean))),
+  };
+}
+
+function buildCoverageSummary(pageData, candidates, pageFingerprint, validationStats = {}) {
+  const coverageLabels = {
+    page_load: "Page load",
+    happy_path: "Happy path",
+    required_validation: "Required validation",
+    invalid_format: "Invalid input",
+    button_state: "Button state",
+    navigation: "Navigation",
+    alerts: "Alerts or status",
+    table_search: "Table search",
+    table_pagination: "Table pagination",
+    table_sorting: "Table sorting",
+    double_submit: "Double submit protection",
+  };
+
+  const counts = candidates.reduce((acc, candidate) => {
+    const key = candidate.__qadeckMeta?.coverage;
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    pageFingerprint,
+    pageType: pageData?.meta?.pageType || "page",
+    totalCandidates: candidates.length,
+    areas: Object.entries(coverageLabels)
+      .filter(([key]) => counts[key] || ["page_load", "happy_path", "required_validation", "invalid_format", "navigation"].includes(key))
+      .map(([key, label]) => ({
+        key,
+        label,
+        count: counts[key] || 0,
+        covered: Boolean(counts[key]),
+      })),
+    validationMix: {
+      positive: candidates.filter((candidate) => candidate.__qadeckMeta?.polarity === "positive").length,
+      negative: candidates.filter((candidate) => candidate.__qadeckMeta?.polarity === "negative").length,
+    },
+    droppedByValidation: Number(validationStats.droppedCount || 0),
+  };
+}
+
+function buildTestCasePrompt(pageData, candidates, exploratoryMode = false) {
+  const meta = pageData?.meta || {};
+  const forms = Array.isArray(pageData?.forms) ? pageData.forms : [];
+  const buttons = Array.isArray(pageData?.buttons) ? pageData.buttons : [];
+  const links = Array.isArray(pageData?.links) ? pageData.links.filter((link) => !link.isExternal) : [];
+  const tables = Array.isArray(pageData?.tables) ? pageData.tables : [];
+  const candidatePayload = candidates.map((candidate) => sanitizeGroundedCandidate(candidate));
+  const confirmedSelectors = collectConfirmedLocators(pageData)
+    .slice(0, 60)
+    .map((entry) => ({
+      label: entry.label,
+      kind: entry.kind,
+      locator: entry.selector,
+    }));
+
+  return `You are polishing grounded QA test cases for a single scanned web page.
+
+CRITICAL RULES:
+- Use ONLY the confirmed selectors from the scan data.
+- Do NOT invent new elements, states, pages, selectors, or validations.
+- Keep the same case IDs and the same number of test cases.
+- You may improve wording, priorities, expected results, and pack membership.
+- If a grounded candidate is negative, keep it negative.
+- If a grounded candidate is positive, keep it positive.
+
+PAGE SUMMARY:
+${JSON.stringify({
     url: meta.url,
     title: meta.title,
     pageType: meta.pageType,
-    framework: meta.framework,
-    forms: (forms || []).map(f => ({
-      purpose: f.purpose,
-      fields: (f.fields || []).map(fi => ({
-        label: fi.label,
-        type: fi.type,
-        required: fi.required,
-        locator: fi.locator,
-        placeholder: fi.placeholder,
-      })),
-      validationRules: f.validationRules,
-      submitButton: f.submitButton?.text,
+    forms: forms.map((form) => ({
+      purpose: form.purpose,
+      fieldCount: form.fieldCount,
+      hasRequired: form.hasRequired,
+      validationRules: form.validationRules,
     })),
-    buttons: (buttons || []).slice(0, 20).map(b => ({
-      text: b.text,
-      action: b.action,
-      disabled: b.disabled,
-      locator: b.locator,
+    buttons: buttons.slice(0, 12).map((button) => ({
+      text: button.text,
+      action: button.action,
+      disabled: button.disabled,
     })),
-    internalLinks: (links || []).filter(l => !l.isExternal).slice(0, 12).map(l => ({
-      text: l.text,
-      path: l.path,
-      locator: l.locator,
+    internalLinks: links.slice(0, 12).map((link) => ({
+      text: link.text,
+      path: link.path,
     })),
-    tables: (tables || []).map(t => ({
-      purpose: t.purpose,
-      headers: t.headers,
-      hasActions: t.hasActions,
-      hasSearch: t.hasSearch,
-      hasSorting: t.hasSorting,
-      hasPagination: t.hasPagination,
+    tables: tables.map((table) => ({
+      purpose: table.purpose,
+      hasSearch: table.hasSearch,
+      hasSorting: table.hasSorting,
+      hasPagination: table.hasPagination,
     })),
-    modals: (modals || []).length,
-    alerts: (alerts || []).map(a => ({ type: a.type, text: a.text.slice(0, 80) })),
-    pageFeatures: pageStructure,
-    hasNavigation: (navigation || []).length > 0,
-  };
+    exploratoryMode: !!exploratoryMode,
+  }, null, 2)}
 
-  const modeBlock = exploratoryMode
-    ? `Generate 10-15 test cases focusing EXCLUSIVELY on:
-1. Boundary values (min/max length, zero, negative numbers, empty vs whitespace-only)
-2. Negative cases (invalid formats, wrong data types, SQL injection patterns, script tags in inputs)
-3. Race conditions and double-submit scenarios (clicking submit twice rapidly)
-4. Session edge cases (expired session, concurrent logins, back-button after logout)
-5. Unusual user behaviour (rapid clicks, tab-key navigation, copy-paste, very long strings >1000 chars, Unicode and RTL characters)
-6. State transition errors (submitting partially-filled forms, interrupting multi-step flows)
+CONFIRMED SELECTORS:
+${JSON.stringify(confirmedSelectors, null, 2)}
 
-Do NOT generate happy-path or positive tests. Every test case must target a potential defect.`
-    : `Generate 10-15 test cases covering ALL of:
-1. Happy path (positive flows with valid data)
-2. Negative cases (empty fields, invalid format, wrong credentials, boundary values)
-3. UI state validation (error messages appear, loading states, disabled buttons)
-4. Navigation flows (links go to correct pages)
-5. Form validation (required fields, format rules, max length)
-6. Edge cases specific to this page type`;
+GROUNDED CANDIDATES:
+${JSON.stringify(candidatePayload, null, 2)}
 
-  return `Analyse this web page and generate comprehensive QA test cases.
-
-PAGE DATA:
-${JSON.stringify(slim, null, 2)}
-
-${modeBlock}
-
-Use the EXACT locators from the page data above in the "locators" field.
-
-Respond with ONLY this JSON (no markdown, no explanation):
+Respond with ONLY valid JSON:
 {
   "testCases": [
     {
-      "id": "TC001",
-      "title": "Concise one-line description of what is verified",
-      "category": "functional|negative|boundary|ui|navigation|accessibility|performance|security",
+      "id": "same-as-input",
+      "title": "Polished title",
+      "category": "functional|negative|boundary|navigation|ui|accessibility|performance|security",
       "caseKind": "page",
       "packs": ["smoke", "regression"],
       "priority": "high|medium|low",
-      "preconditions": "State required before this test (e.g. 'User is not logged in')",
-      "steps": [
-        "1. Navigate to <url>",
-        "2. Perform <action> on <element>",
-        "3. Observe <result>"
-      ],
-      "expectedResult": "Specific, measurable expected outcome",
+      "preconditions": "Updated preconditions",
+      "steps": ["1. ...", "2. ..."],
+      "expectedResult": "Specific measurable expected result",
       "locators": {
-        "descriptive_name": "actual_css_or_xpath_from_page_data"
+        "descriptive_name": "confirmed_selector_from_scan"
       },
       "testData": {
         "key": "value"
       },
-      "tags": ["smoke", "auth"]
+      "tags": ["page", "validation"]
     }
   ]
 }`;
+}
+
+function normalizeGeneratedTestCaseForOutput(testCase, index = 0) {
+  const caseKind = normalizeGeneratedCaseKind(testCase, "page");
+  const packs = normalizeGeneratedPacks(testCase, caseKind);
+  return {
+    id: testCase.id || `TC${String(index + 1).padStart(3, "0")}`,
+    title: testCase.title || "Untitled test case",
+    category: normalizeGeneratedCategory(testCase.category, caseKind, packs),
+    priority: testCase.priority || "medium",
+    preconditions: testCase.preconditions || "",
+    steps: Array.isArray(testCase.steps) ? testCase.steps : [],
+    expectedResult: testCase.expectedResult || testCase.expected_result || "",
+    locators: testCase.locators || {},
+    testData: testCase.testData || testCase.test_data || {},
+    tags: testCase.tags || [],
+    approved: testCase.approved !== false,
+    caseKind,
+    packs,
+    suite: deriveLegacySuite(caseKind, packs),
+    scope: "page",
+    source: testCase.source || "page",
+  };
+}
+
+function normalizeTitleKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractKnownElementTerms(pageData) {
+  const terms = new Set();
+  const add = (value) => {
+    const text = String(value || "").trim().toLowerCase();
+    if (!text || text.length < 3) return;
+    terms.add(text);
+    const normalized = text.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    if (normalized) terms.add(normalized);
+  };
+
+  for (const form of pageData?.forms || []) {
+    add(form.purpose);
+    for (const field of form.fields || []) {
+      add(field.label);
+      add(field.name);
+      add(field.placeholder);
+      add(field.type);
+    }
+    add(form.submitButton?.text);
+    add(form.submitButton?.ariaLabel);
+  }
+  for (const input of pageData?.inputs || []) {
+    add(input.label);
+    add(input.name);
+    add(input.placeholder);
+    add(input.type);
+  }
+  for (const button of pageData?.buttons || []) {
+    add(button.text);
+    add(button.ariaLabel);
+    add(button.action);
+  }
+  for (const link of pageData?.links || []) {
+    add(link.text);
+    add(link.path);
+  }
+  for (const table of pageData?.tables || []) {
+    add(table.purpose);
+    for (const header of table.headers || []) add(header);
+  }
+  for (const alert of pageData?.alerts || []) {
+    add(alert.text);
+    add(alert.type);
+  }
+
+  return Array.from(terms);
+}
+
+function mentionsUnknownElements(testCase, knownTerms) {
+  const text = [testCase.title, ...(testCase.steps || []), testCase.expectedResult]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const quoted = Array.from(text.matchAll(/["']([^"']{3,50})["']/g)).map((match) => match[1].trim());
+  const verbMentions = Array.from(text.matchAll(/\b(?:click|enter|type|select|open|verify|assert|submit|check)\s+(?:the\s+)?([a-z0-9][a-z0-9\s/-]{2,40})/g))
+    .map((match) => match[1].trim())
+    .filter((phrase) => phrase.split(" ").length <= 5);
+
+  const candidates = Array.from(new Set([...quoted, ...verbMentions]));
+  return candidates.some((candidate) => {
+    const normalized = candidate.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!normalized || normalized.length < 4) return false;
+    return !knownTerms.some((term) => term.includes(normalized) || normalized.includes(term));
+  });
+}
+
+function finalizeGeneratedTestCases(pageData, candidates, aiCases) {
+  const selectorSet = new Set(collectConfirmedLocators(pageData).map((entry) => entry.selector));
+  const knownTerms = extractKnownElementTerms(pageData);
+  const aiById = new Map(
+    (Array.isArray(aiCases) ? aiCases : [])
+      .filter((entry) => entry && typeof entry === "object")
+      .map((entry) => [String(entry.id || ""), entry])
+      .filter(([id]) => !!id)
+  );
+
+  const validationStats = {
+    aiCount: Array.isArray(aiCases) ? aiCases.length : 0,
+    fallbackCount: 0,
+    droppedCount: 0,
+    duplicateTitlesRemoved: 0,
+    invalidLocatorCases: 0,
+    missingExpectedResults: 0,
+    unsupportedElementMentions: 0,
+    warnings: [],
+  };
+
+  const titleKeys = new Set();
+  const finalCases = candidates.map((candidate, index) => {
+    const fallback = normalizeGeneratedTestCaseForOutput(sanitizeGroundedCandidate(candidate), index);
+    const raw = aiById.get(candidate.id);
+    if (!raw) {
+      validationStats.fallbackCount += 1;
+      titleKeys.add(normalizeTitleKey(fallback.title));
+      return fallback;
+    }
+
+    const merged = normalizeGeneratedTestCaseForOutput({
+      ...sanitizeGroundedCandidate(candidate),
+      ...raw,
+      id: candidate.id,
+      locators: raw.locators && typeof raw.locators === "object" ? raw.locators : candidate.locators,
+      testData: raw.testData && typeof raw.testData === "object" ? raw.testData : candidate.testData,
+      steps: Array.isArray(raw.steps) ? raw.steps : candidate.steps,
+      expectedResult: raw.expectedResult || raw.expected_result || candidate.expectedResult,
+    }, index);
+
+    const invalidLocators = Object.values(merged.locators || {}).filter((locator) => !selectorSet.has(String(locator)));
+    const titleKey = normalizeTitleKey(merged.title);
+    const duplicateTitle = titleKey && titleKeys.has(titleKey);
+    const missingExpected = !String(merged.expectedResult || "").trim();
+    const unknownElementMention = mentionsUnknownElements(merged, knownTerms);
+
+    if (invalidLocators.length) validationStats.invalidLocatorCases += 1;
+    if (duplicateTitle) validationStats.duplicateTitlesRemoved += 1;
+    if (missingExpected) validationStats.missingExpectedResults += 1;
+    if (unknownElementMention) validationStats.unsupportedElementMentions += 1;
+
+    if (invalidLocators.length || duplicateTitle || missingExpected || unknownElementMention) {
+      validationStats.fallbackCount += 1;
+      titleKeys.add(normalizeTitleKey(fallback.title));
+      return fallback;
+    }
+
+    titleKeys.add(titleKey);
+    return merged;
+  });
+
+  if (pageData?.forms?.length) {
+    const hasPositive = candidates.some((candidate, index) =>
+      candidate.__qadeckMeta?.polarity === "positive" &&
+      finalCases[index] &&
+      finalCases[index].id === candidate.id
+    );
+    const hasNegative = candidates.some((candidate, index) =>
+      candidate.__qadeckMeta?.polarity === "negative" &&
+      finalCases[index] &&
+      finalCases[index].id === candidate.id
+    );
+    if (!hasPositive || !hasNegative) {
+      validationStats.warnings.push("Minimum form coverage mix was repaired using grounded fallback candidates.");
+    }
+  }
+
+  const qualityReport = {
+    status: validationStats.fallbackCount ? "validated_with_fallbacks" : "validated",
+    totalCandidates: candidates.length,
+    aiCount: validationStats.aiCount,
+    acceptedCount: finalCases.length,
+    fallbackCount: validationStats.fallbackCount,
+    droppedCount: validationStats.droppedCount,
+    duplicateTitlesRemoved: validationStats.duplicateTitlesRemoved,
+    invalidLocatorCases: validationStats.invalidLocatorCases,
+    missingExpectedResults: validationStats.missingExpectedResults,
+    unsupportedElementMentions: validationStats.unsupportedElementMentions,
+    warnings: validationStats.warnings,
+  };
+
+  return {
+    testCases: finalCases,
+    qualityReport,
+    coverageSummary: buildCoverageSummary(pageData, candidates, buildPageFingerprint(pageData), validationStats),
+  };
 }
 
 // ─── Extract real page signals from scanned DOM ───────────────────────────────
@@ -1769,9 +3202,9 @@ function generatePageObject(pageData, framework) {
   return { filename, content };
 }
 
-function generateTestData(testCases, pageData, framework) {
+function generateTestData(testCases, pageData, framework, options = {}) {
   const isTs = framework === "playwright-typescript", isJava = framework === "selenium-java";
-  const filename = isTs ? "test_data.ts" : isJava ? "test_data.json" : "test_data.py";
+  const filename = options.filename || (isTs ? "test_data.ts" : isJava ? "test_data.json" : "test_data.py");
   const merged = {};
   for (const tc of (testCases || [])) {
     if (tc.testData && typeof tc.testData === "object") Object.assign(merged, tc.testData);
@@ -1800,12 +3233,12 @@ function _extractApiSummary(pageObjectContent, framework) {
   }).map(l => l.trim()).join("\n");
 }
 
-function buildTestsOnlyPrompt(testCases, pageData, framework, pageObjectFilename, pageObjectApi, networkCalls, customAssertions, datasetsMap) {
+function buildTestsOnlyPrompt(testCases, pageData, framework, pageObjectFilename, pageObjectApi, networkCalls, customAssertions, datasetsMap, options = {}) {
   const pageType = pageData?.meta?.pageType || "page";
   const isTs = framework === "playwright-typescript", isJava = framework === "selenium-java";
   const ext = isJava ? "java" : isTs ? "ts" : "py";
   const baseUrl = pageData?.meta?.url || "https://example.com";
-  const filename = `test_${_toSnake(pageType)}.${ext}`;
+  const filename = options.outputFilename || `test_${_toSnake(pageType)}.${ext}`;
   const slim = (testCases || []).slice(0, 15).map(tc => ({ id: tc.id, title: tc.title, steps: tc.steps, expectedResult: tc.expectedResult, testData: tc.testData || {}, customAssertions: tc.customAssertions || [] }));
 
   const netSection = networkCalls?.length
@@ -1820,6 +3253,62 @@ function buildTestsOnlyPrompt(testCases, pageData, framework, pageObjectFilename
     ? `\nDATA-DRIVEN DATASETS (parametrize these test methods):\n${Object.entries(datasetsMap).map(([id, rows]) => `${id}: ${rows.length} rows — keys: ${Object.keys(rows[0] || {}).join(", ")}\n  Data: ${JSON.stringify(rows)}`).join("\n")}\n`
     : "";
 
+  const repairSection = Array.isArray(options.repairErrors) && options.repairErrors.length
+    ? `\nPREVIOUS VALIDATION ERRORS TO FIX EXACTLY:\n${options.repairErrors.map((error, index) => `${index + 1}. ${error}`).join("\n")}\n`
+    : "";
+
+  if (framework === "selenium-python") {
+    const pageObjectClass = `${toPascalCase(pageType)}Page`;
+    const testClassName = `Test${toPascalCase(pageType)}`;
+    const pageObjectImport = options.pageObjectImport || `from pages.${stripFileExtension(path.basename(pageObjectFilename))} import ${pageObjectClass}`;
+    const testDataImport = options.testDataImport || "from data.test_data import TEST_DATA";
+
+    return `Generate ONLY the Selenium Python pytest test module for this page.
+
+OUTPUT FILENAME: ${filename}
+BASE URL: ${baseUrl}
+
+USE THESE EXACT IMPORTS:
+from base_test import BaseTest, set_active_driver
+${pageObjectImport}
+${testDataImport}
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+
+USE THIS EXACT CLASS NAME:
+class ${testClassName}(BaseTest)
+
+REQUIRED CLASS SETUP:
+def setup_method(self):
+    super().setup_method()
+    set_active_driver(self.driver)
+    self.page = ${pageObjectClass}(self.driver)
+
+def teardown_method(self):
+    super().teardown_method()
+
+AVAILABLE PAGE OBJECT METHODS (use ONLY these — never call driver.find_element directly):
+${pageObjectApi}
+${netSection}${customSection}${datasetSection}${repairSection}
+TEST CASES (${slim.length}):
+${JSON.stringify(slim, null, 2)}
+
+Rules:
+- One test method per test case named test_{id}_{snake_title}
+- Use page = self.page inside each test method
+- Use ONLY the page object methods listed above for interactions
+- Assertions must be valid Selenium Python (WebDriverWait, EC, element text/state checks)
+- No time.sleep
+- No TODOs, pass statements, or empty method bodies
+- Keep each test method syntactically complete and runnable
+- If customAssertions are present in a test case, inject them near the end of that test method
+
+Respond with ONLY this JSON (no markdown fences):
+{"tests":{"filename":"${filename}","content":"<full python module>"}}`;
+  }
+
   return `Generate ONLY the test class file for ${framework}.
 
 PAGE OBJECT: ${pageObjectFilename} (already generated — import and use it)
@@ -1827,7 +3316,7 @@ BASE URL: ${baseUrl}
 
 AVAILABLE PAGE OBJECT METHODS (use ONLY these — never call driver.find_element or page.locator directly):
 ${pageObjectApi}
-${netSection}${customSection}${datasetSection}
+${netSection}${customSection}${datasetSection}${repairSection}
 TEST CASES (${slim.length}):
 ${JSON.stringify(slim, null, 2)}
 
