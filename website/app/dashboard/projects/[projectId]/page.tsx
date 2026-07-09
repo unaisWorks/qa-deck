@@ -26,6 +26,7 @@ import {
   deleteProjectGroup,
   type ProjectBundle,
   type ProjectMeta,
+  type RunReportTest,
   type WebsiteTestCase,
   type WebsiteTestCaseKind,
   type WebsiteTestCasePack,
@@ -571,6 +572,7 @@ export default function ProjectDetailPage() {
   const [runState, setRunState] = useState<"idle" | "running" | "done" | "error" | "stopped">("idle");
   const [runOutput, setRunOutput] = useState<{ type: string; text: string }[]>([]);
   const [runResults, setRunResults] = useState<{ name: string; status: string; duration?: string | null }[]>([]);
+  const [runReport, setRunReport] = useState<RunReportTest[] | null>(null);
   const [runError, setRunError] = useState("");
   const runAbortRef = useRef<AbortController | null>(null);
   // Code editor state
@@ -936,6 +938,7 @@ export default function ProjectDetailPage() {
     setRunState("running");
     setRunOutput([]);
     setRunResults([]);
+    setRunReport(null);
     setRunError("");
     setRunSaved(false);
     try {
@@ -979,7 +982,17 @@ export default function ProjectDetailPage() {
               setRunState("error");
               return;
             } else if (evt.type === "done") {
-              setRunResults(evt.results || []);
+              const reportTests: RunReportTest[] | null = Array.isArray(evt.report?.tests) ? evt.report.tests : null;
+              if (reportTests && reportTests.length > 0) {
+                setRunReport(reportTests);
+                setRunResults(reportTests.map((t) => ({
+                  name: t.nodeid,
+                  status: t.outcome === "passed" ? "passed" : t.outcome,
+                  duration: typeof t.duration === "number" ? `${t.duration.toFixed(2)}s` : null,
+                })));
+              } else {
+                setRunResults(evt.results || []);
+              }
               setRunState(evt.exitCode === 0 ? "done" : "error");
             }
           } catch {}
@@ -1590,6 +1603,11 @@ export default function ProjectDetailPage() {
         summary: `${passed} passed, ${failed} failed`,
         terminalOutput: runOutput.map(l => l.text).join("\n"),
         results: runResults,
+        // Screenshots are display-only data URIs; strip them so the run
+        // record stays within Firestore's 1MB document limit.
+        report: runReport
+          ? { tests: runReport.map(({ screenshot: _screenshot, ...rest }) => rest) }
+          : null,
       };
       await saveNewProjectVersion(user.uid, bundle.meta.id, {
         artifactOverrides: { run: savedRun },
@@ -2882,15 +2900,32 @@ export default function ProjectDetailPage() {
                             const idxMatch = r.name.match(/\[test_case(\d+)\]/);
                             const tcIdx = idxMatch ? parseInt(idxMatch[1]) : -1;
                             const tc = tcIdx >= 0 ? activeRunCases[tcIdx] : null;
+                            const detail = r.status !== "passed" ? runReport?.find((t) => t.nodeid === r.name) : null;
                             return (
-                              <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-xs">
-                                <span className={`font-mono ${r.status === "passed" ? "text-green" : "text-red-400"}`}>{r.status === "passed" ? "✓" : "✗"}</span>
-                                {tc?.id && <span className="px-1.5 py-0.5 rounded-md bg-white/8 text-white/40 font-mono text-[10px] shrink-0">{tc.id}</span>}
-                                <span className="flex-1 text-white/75 truncate">{tc?.title || r.name}</span>
-                                {r.duration && <span className="text-white/30 font-mono shrink-0">{r.duration}</span>}
-                                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${r.status === "passed" ? "bg-green/10 text-green border-green/20" : "bg-red-500/10 text-red-300 border-red-500/20"}`}>
-                                  {r.status.toUpperCase()}
-                                </span>
+                              <div key={i} className="rounded-xl border border-white/8 bg-white/2">
+                                <div className="flex items-center gap-3 px-3 py-2 text-xs">
+                                  <span className={`font-mono ${r.status === "passed" ? "text-green" : "text-red-400"}`}>{r.status === "passed" ? "✓" : "✗"}</span>
+                                  {tc?.id && <span className="px-1.5 py-0.5 rounded-md bg-white/8 text-white/40 font-mono text-[10px] shrink-0">{tc.id}</span>}
+                                  <span className="flex-1 text-white/75 truncate">{tc?.title || r.name}</span>
+                                  {r.duration && <span className="text-white/30 font-mono shrink-0">{r.duration}</span>}
+                                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${r.status === "passed" ? "bg-green/10 text-green border-green/20" : "bg-red-500/10 text-red-300 border-red-500/20"}`}>
+                                    {r.status.toUpperCase()}
+                                  </span>
+                                </div>
+                                {detail && (detail.message || detail.screenshot) && (
+                                  <div className="px-3 pb-3 space-y-2">
+                                    {detail.message && (
+                                      <pre className="text-[11px] text-red-200/80 font-mono whitespace-pre-wrap max-h-40 overflow-auto rounded-lg bg-red-500/5 border border-red-500/15 p-2.5">{detail.message}</pre>
+                                    )}
+                                    {detail.screenshot && (
+                                      <details>
+                                        <summary className="text-[11px] text-white/40 cursor-pointer hover:text-white/70 select-none">View failure screenshot</summary>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={detail.screenshot} alt={`Failure screenshot for ${tc?.title || r.name}`} className="mt-2 rounded-lg border border-white/10 max-h-80 w-auto" />
+                                      </details>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -3054,15 +3089,32 @@ export default function ProjectDetailPage() {
                             const idxMatch = r.name.match(/\[test_case(\d+)\]/);
                             const tcIdx = idxMatch ? parseInt(idxMatch[1]) : -1;
                             const tc = tcIdx >= 0 ? activeRunCases[tcIdx] : null;
+                            const detail = r.status !== "passed" ? runReport?.find((t) => t.nodeid === r.name) : null;
                             return (
-                              <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-xs">
-                                <span className={`font-mono ${r.status === "passed" ? "text-green" : "text-red-400"}`}>{r.status === "passed" ? "✓" : "✗"}</span>
-                                {tc?.id && <span className="px-1.5 py-0.5 rounded-md bg-white/8 text-white/40 font-mono text-[10px] shrink-0">{tc.id}</span>}
-                                <span className="flex-1 text-white/75 truncate">{tc?.title || r.name}</span>
-                                {r.duration && <span className="text-white/30 font-mono shrink-0">{r.duration}</span>}
-                                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${r.status === "passed" ? "bg-green/10 text-green border-green/20" : "bg-red-500/10 text-red-300 border-red-500/20"}`}>
-                                  {r.status.toUpperCase()}
-                                </span>
+                              <div key={i} className="rounded-xl border border-white/8 bg-white/2">
+                                <div className="flex items-center gap-3 px-3 py-2 text-xs">
+                                  <span className={`font-mono ${r.status === "passed" ? "text-green" : "text-red-400"}`}>{r.status === "passed" ? "✓" : "✗"}</span>
+                                  {tc?.id && <span className="px-1.5 py-0.5 rounded-md bg-white/8 text-white/40 font-mono text-[10px] shrink-0">{tc.id}</span>}
+                                  <span className="flex-1 text-white/75 truncate">{tc?.title || r.name}</span>
+                                  {r.duration && <span className="text-white/30 font-mono shrink-0">{r.duration}</span>}
+                                  <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${r.status === "passed" ? "bg-green/10 text-green border-green/20" : "bg-red-500/10 text-red-300 border-red-500/20"}`}>
+                                    {r.status.toUpperCase()}
+                                  </span>
+                                </div>
+                                {detail && (detail.message || detail.screenshot) && (
+                                  <div className="px-3 pb-3 space-y-2">
+                                    {detail.message && (
+                                      <pre className="text-[11px] text-red-200/80 font-mono whitespace-pre-wrap max-h-40 overflow-auto rounded-lg bg-red-500/5 border border-red-500/15 p-2.5">{detail.message}</pre>
+                                    )}
+                                    {detail.screenshot && (
+                                      <details>
+                                        <summary className="text-[11px] text-white/40 cursor-pointer hover:text-white/70 select-none">View failure screenshot</summary>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={detail.screenshot} alt={`Failure screenshot for ${tc?.title || r.name}`} className="mt-2 rounded-lg border border-white/10 max-h-80 w-auto" />
+                                      </details>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

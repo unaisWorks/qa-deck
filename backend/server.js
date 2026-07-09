@@ -354,6 +354,108 @@ function escapeRegExp(value) {
 
 // ─── Run Tests ────────────────────────────────────────────────────────────────
 
+// Pytest plugin injected into the run workspace for structured per-test
+// results. Zero external dependencies: `python -m pytest` puts the workspace
+// on sys.path, and failure screenshots come from the active Selenium driver
+// tracked by the generated base_test.py.
+const QA_DECK_REPORTER_SOURCE = `import json
+import os
+
+_results = []
+_report_dir = os.environ.get("QA_DECK_REPORT_DIR", ".qa-deck-report")
+
+
+def _safe_name(nodeid):
+    return "".join(c if c.isalnum() else "_" for c in nodeid)[:150]
+
+
+def _capture_screenshot(nodeid):
+    try:
+        import base_test
+        driver = base_test.get_active_driver()
+        if driver is None:
+            return None
+        os.makedirs(_report_dir, exist_ok=True)
+        filename = _safe_name(nodeid) + ".png"
+        if driver.save_screenshot(os.path.join(_report_dir, filename)):
+            return filename
+    except Exception:
+        pass
+    return None
+
+
+def pytest_runtest_logreport(report):
+    is_call = report.when == "call"
+    is_setup_issue = report.when == "setup" and report.outcome != "passed"
+    if not (is_call or is_setup_issue):
+        return
+
+    outcome = report.outcome
+    if is_setup_issue and report.outcome == "failed":
+        outcome = "error"
+
+    entry = {
+        "nodeid": report.nodeid,
+        "outcome": outcome,
+        "duration": round(getattr(report, "duration", 0) or 0, 3),
+        "message": None,
+        "screenshot": None,
+    }
+    if report.failed:
+        entry["message"] = str(report.longrepr)[-2000:] if report.longrepr else None
+        entry["screenshot"] = _capture_screenshot(report.nodeid)
+    _results.append(entry)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    os.makedirs(_report_dir, exist_ok=True)
+    summary = {"passed": 0, "failed": 0, "error": 0, "skipped": 0}
+    for entry in _results:
+        key = entry["outcome"] if entry["outcome"] in summary else "failed"
+        summary[key] += 1
+    payload = {"exitStatus": int(exitstatus), "summary": summary, "tests": _results}
+    with open(os.path.join(_report_dir, "report.json"), "w") as handle:
+        json.dump(payload, handle)
+`;
+
+const RUN_REPORT_MAX_SCREENSHOT_BYTES = 1.5 * 1024 * 1024;
+const RUN_REPORT_MAX_SCREENSHOTS = 10;
+
+function readRunReport(reportDir) {
+  try {
+    const reportPath = path.join(reportDir, "report.json");
+    if (!fs.existsSync(reportPath)) return null;
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    if (!Array.isArray(report.tests)) return null;
+
+    let embedded = 0;
+    report.tests = report.tests.map((entry) => {
+      const test = { ...entry };
+      if (test.screenshot && embedded < RUN_REPORT_MAX_SCREENSHOTS) {
+        const shotPath = path.join(reportDir, path.basename(test.screenshot));
+        try {
+          const stat = fs.statSync(shotPath);
+          if (stat.size <= RUN_REPORT_MAX_SCREENSHOT_BYTES) {
+            test.screenshot = `data:image/png;base64,${fs.readFileSync(shotPath).toString("base64")}`;
+            embedded += 1;
+          } else {
+            test.screenshot = null;
+          }
+        } catch {
+          test.screenshot = null;
+        }
+      } else if (test.screenshot) {
+        test.screenshot = null;
+      }
+      return test;
+    });
+    return report;
+  } catch (err) {
+    console.warn("[Run Tests] Failed to read run report:", err.message);
+    return null;
+  }
+}
+
 async function handleRunTests(req, res) {
   const body = await readBody(req);
   const { scripts, framework, headless = true } = body;
@@ -446,12 +548,26 @@ async function handleRunTests(req, res) {
   };
 
   const runCfg = runConfigs[framework] || runConfigs["selenium-python"];
+  const isPythonRun = framework === "selenium-python" || framework === "playwright-python";
+  const reportDir = path.join(tmpDir, ".qa-deck-report");
+  let runArgs = runCfg.args;
+  if (isPythonRun) {
+    // Inject the structured reporter plugin; `python -m pytest` puts the
+    // workspace cwd on sys.path so `-p qa_deck_reporter` resolves.
+    fs.writeFileSync(path.join(tmpDir, "qa_deck_reporter.py"), QA_DECK_REPORTER_SOURCE);
+    runArgs = [...runCfg.args, "-p", "qa_deck_reporter"];
+  }
+
   sseEvent({
     type: "start",
-    message: `Running: ${runCfg.bin} ${runCfg.args.join(" ")} (headless=${headless ? "true" : "false"})`,
+    message: `Running: ${runCfg.bin} ${runArgs.join(" ")} (headless=${headless ? "true" : "false"})`,
   });
 
-  const child = spawn(runCfg.bin, runCfg.args, { cwd: tmpDir, shell: process.platform === "win32" });
+  const child = spawn(runCfg.bin, runArgs, {
+    cwd: tmpDir,
+    shell: process.platform === "win32",
+    env: isPythonRun ? { ...process.env, QA_DECK_REPORT_DIR: reportDir } : process.env,
+  });
   let stdout = "";
   const liveResults = [];
   const parseLiveStdout = createLiveResultParser(framework);
@@ -513,7 +629,8 @@ async function handleRunTests(req, res) {
     }
     runFinished = true;
     const results = parseTestResults(stdout, framework);
-    sseEvent({ type: "done", exitCode: code, results });
+    const report = isPythonRun ? readRunReport(reportDir) : null;
+    sseEvent({ type: "done", exitCode: code, results, report });
     res.end();
     cleanupRunArtifacts();
   });
@@ -6173,4 +6290,6 @@ module.exports = {
   buildJourneyGenerationSummary,
   buildJourneySharedFiles,
   normalizeJourneyScriptBundle,
+  readRunReport,
+  QA_DECK_REPORTER_SOURCE,
 };

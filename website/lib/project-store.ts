@@ -79,6 +79,15 @@ export interface ProjectVersion {
   generationMode?: string;
 }
 
+export interface RunReportTest {
+  nodeid: string;
+  outcome: string;
+  duration?: number | null;
+  message?: string | null;
+  /** Base64 data URI while displayed live; stripped before persisting (Firestore 1MB doc limit). */
+  screenshot?: string | null;
+}
+
 export interface SavedRunResult {
   id: string;
   savedAt: string;
@@ -88,6 +97,8 @@ export interface SavedRunResult {
   summary: string;
   terminalOutput: string;
   results: { name: string; status: string; duration?: string | null }[];
+  /** Structured per-test report from the local runner (screenshots stripped). */
+  report?: { exitStatus?: number; tests: RunReportTest[] } | null;
 }
 
 export interface WebsiteTestCase {
