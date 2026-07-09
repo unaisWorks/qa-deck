@@ -4424,13 +4424,16 @@ async function generateJourneyScript() {
 
   if (!result?.success) {
     show("script-empty");
-    showToast(result?.error || "Journey script generation failed", "error");
+    const validationError = Array.isArray(result?.validation?.errors)
+      ? result.validation.errors.find(Boolean)
+      : null;
+    showToast(validationError || result?.error || "Journey script generation failed", "error");
     return;
   }
 
   state.activeArtifactMode = "journey";
   state.scripts = { ...result.bundle, selectedPack: state.selectedScriptPack };
-  state.scriptValidation = null;
+  state.scriptValidation = result.validation || null;
   state.scriptGenerationMode = "journey";
   state.selectedFile = result.bundle?.files?.[0]?.filename || null;
   state.journey.generated = {

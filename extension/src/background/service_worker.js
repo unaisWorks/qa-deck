@@ -431,7 +431,11 @@ async function handleGenerateJourneyScript(message, _sender, sendResponse) {
     }, 120000);
     const data = await res.json();
     if (data.success) {
-      sendResponse({ success: true, bundle: data.bundle });
+      sendResponse({ success: true, bundle: data.bundle, validation: data.validation || null });
+      return;
+    }
+    if (data.validation) {
+      sendResponse({ success: false, error: data.error, validation: data.validation, bundle: data.bundle || null });
       return;
     }
     throw new Error(data.error);

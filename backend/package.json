@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "echo \"No automated tests configured yet.\""
+    "test": "node --test"
   },
   "keywords": [
     "qa",

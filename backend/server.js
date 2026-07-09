@@ -329,11 +329,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`\n🚀 QA Deck Backend running`);
-  console.log(`   Dashboard:    http://localhost:${PORT}`);
-  console.log(`   API Health:   http://localhost:${PORT}/api/health\n`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`\n🚀 QA Deck Backend running`);
+    console.log(`   Dashboard:    http://localhost:${PORT}`);
+    console.log(`   API Health:   http://localhost:${PORT}/api/health\n`);
+  });
+}
 
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
@@ -1076,7 +1078,9 @@ function validateSeleniumPythonBundleLayout(files, mode = "page") {
   const errors = [];
   const required = mode === "project-bundle"
     ? ["base_test.py", "conftest.py", "tests/conftest.py", "pytest.ini", "requirements.txt"]
-    : ["base_test.py", "pytest.ini"];
+    : mode === "journey"
+      ? ["base_test.py", "conftest.py", "pytest.ini"]
+      : ["base_test.py", "pytest.ini"];
 
   required.forEach((target) => {
     if (!normalized.includes(target)) {
@@ -1085,9 +1089,12 @@ function validateSeleniumPythonBundleLayout(files, mode = "page") {
   });
 
   const pageFiles = normalized.filter((name) => name.startsWith("pages/") && name.endsWith(".py"));
-  const testFiles = normalized.filter((name) => name.startsWith("tests/") && /test_.*\.py$/.test(path.basename(name)));
+  // Journey step tests may live at the workspace root or under tests/.
+  const testFiles = mode === "journey"
+    ? normalized.filter((name) => /^test_.*\.py$/.test(path.basename(name)) && path.basename(name) !== "test_data.py")
+    : normalized.filter((name) => name.startsWith("tests/") && /test_.*\.py$/.test(path.basename(name)));
   if (!pageFiles.length) errors.push("Missing generated page object file under pages/.");
-  if (!testFiles.length) errors.push("Missing generated test file under tests/.");
+  if (!testFiles.length) errors.push(mode === "journey" ? "Missing generated journey/step test file." : "Missing generated test file under tests/.");
   if (mode === "project-bundle" && !normalized.some((name) => name.startsWith("data/") && name.endsWith(".py"))) {
     errors.push("Missing generated page test-data file under data/.");
   }
@@ -1138,6 +1145,14 @@ async function validateGeneratedBundle(files, framework, generationMode = "page"
     validation.errors.push(...syntaxErrors);
     if (validation.errors.length) {
       validation.status = "failed";
+      return validation;
+    }
+
+    const pytestProbe = await runProcess("python3", ["-m", "pytest", "--version"]);
+    if (pytestProbe.code !== 0) {
+      // Environment issue, not a bundle defect — don't fail validation or
+      // trigger AI repair attempts over a missing local pytest install.
+      validation.skippedChecks = ["pytest-collection"];
       return validation;
     }
 
@@ -1842,27 +1857,67 @@ async function handleGenerateJourneyScript(req, res) {
 
   const approvedCases = testCases.filter((tc) => tc.approved !== false);
   const summary = buildJourneyGenerationSummary(journey);
-  const prompt = buildJourneyScriptPrompt(journey, approvedCases, framework, summary);
-  const result = await callAI(
-    apiKey,
-    prompt,
-    8192,
-    "You are a senior QA automation engineer. Generate a multi-page automation bundle. Respond ONLY with valid JSON."
-  );
+  const maxRepairAttempts = 2;
 
-  if (!result.success) return jsonResponse(res, 502, { error: result.error });
+  let normalized = null;
+  let lastValidation = { status: "failed", errors: [], repairAttempts: 0, generationMode: "journey" };
+  let lastError = "";
 
-  let bundle;
-  try {
-    const clean = sanitizeAiJson(result.text);
-    bundle = JSON.parse(clean);
-  } catch (err) {
-    console.error("[Journey Script Parse Error]", err.message);
-    return jsonResponse(res, 502, { error: "Failed to parse journey script response", detail: err.message });
+  for (let attempt = 0; attempt <= maxRepairAttempts; attempt += 1) {
+    const prompt = buildJourneyScriptPrompt(
+      journey,
+      approvedCases,
+      framework,
+      summary,
+      attempt > 0 ? lastValidation.errors : []
+    );
+    const result = await callAI(
+      apiKey,
+      prompt,
+      8192,
+      "You are a senior QA automation engineer. Generate a multi-page automation bundle. Respond ONLY with valid JSON."
+    );
+
+    if (!result.success) {
+      lastError = result.error || "Journey script generation failed";
+      lastValidation = { status: "failed", errors: [lastError], repairAttempts: attempt, generationMode: "journey" };
+      continue;
+    }
+
+    let bundle;
+    try {
+      const clean = sanitizeAiJson(result.text);
+      bundle = JSON.parse(clean);
+    } catch (err) {
+      console.error("[Journey Script Parse Error]", err.message);
+      lastError = `Failed to parse journey script response: ${err.message}`;
+      lastValidation = { status: "failed", errors: [lastError], repairAttempts: attempt, generationMode: "journey" };
+      continue;
+    }
+
+    normalized = normalizeJourneyScriptBundle(bundle, framework, journey, approvedCases, summary);
+    const validation = await validateGeneratedBundle(normalized.files, framework, "journey");
+    validation.repairAttempts = attempt;
+    lastValidation = validation;
+
+    if (validation.status === "passed") {
+      console.log(`[Journey Script] ✓ ${normalized.files.length} files generated and validated (attempt ${attempt + 1})`);
+      return jsonResponse(res, 200, { success: true, bundle: normalized, validation });
+    }
+
+    console.warn(`[Journey Script] Validation failed (attempt ${attempt + 1}/${maxRepairAttempts + 1}): ${validation.errors.join("; ")}`);
   }
 
-  const normalized = normalizeJourneyScriptBundle(bundle, framework, journey, approvedCases, summary);
-  jsonResponse(res, 200, { success: true, bundle: normalized });
+  if (!normalized) {
+    return jsonResponse(res, 502, { error: lastError || "Journey script generation failed", validation: lastValidation });
+  }
+
+  return jsonResponse(res, 422, {
+    success: false,
+    error: "Generated journey bundle failed validation",
+    bundle: normalized,
+    validation: lastValidation,
+  });
 }
 
 async function handleSaveProject(req, res) {
@@ -3928,14 +3983,18 @@ Respond ONLY with valid JSON:
 }`;
 }
 
-function buildJourneyScriptPrompt(journey, approvedCases, framework, summary) {
+function buildJourneyScriptPrompt(journey, approvedCases, framework, summary, repairErrors = []) {
   const ext = framework.includes("java") ? "java" : framework.includes("typescript") ? "ts" : "py";
   const grouped = {
     journeyCases: approvedCases.filter((tc) => tc.scope === "journey").map(slimJourneyCaseForPrompt),
     stepCases: approvedCases.filter((tc) => tc.scope === "step").map(slimJourneyCaseForPrompt),
   };
+  const repairSection = repairErrors.length
+    ? `\nPREVIOUS ATTEMPT FAILED VALIDATION. You MUST fix these errors in this attempt:\n${repairErrors.map((error) => `- ${error}`).join("\n")}\n`
+    : "";
 
   return `Generate a multi-page automation bundle for this journey.
+${repairSection}
 
 FRAMEWORK: ${framework}
 JOURNEY NAME: ${journey.name || "Untitled Journey"}
@@ -6095,3 +6154,23 @@ async function handleProxyAsset(req, res, url) {
     if (!res.headersSent) { res.writeHead(502); res.end(); }
   }
 }
+
+// ─── Test exports ─────────────────────────────────────────────────────────────
+// Exposed for the test suite only; the server starts via `node server.js`
+// (require.main guard above) so requiring this module has no side effects
+// beyond module initialization.
+module.exports = {
+  server,
+  sanitizeAiJson,
+  normalizeRuntimePath,
+  writeRuntimeWorkspace,
+  cleanupWorkspace,
+  serializeGeneratedScriptsToFiles,
+  validateSeleniumPythonBundleLayout,
+  validatePythonSyntaxInWorkspace,
+  validateGeneratedBundle,
+  buildPageFingerprint,
+  buildJourneyGenerationSummary,
+  buildJourneySharedFiles,
+  normalizeJourneyScriptBundle,
+};
