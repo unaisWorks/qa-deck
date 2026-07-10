@@ -700,7 +700,12 @@ function renderProjectWorkspace() {
   if (dashboardBtn) dashboardBtn.classList.toggle("hidden", !isCloudSignedIn());
   if (createBtn) createBtn.textContent = (selectedGroup || state.activeProject) ? "Add page" : "Create project";
   if (modalStorage) modalStorage.value = isCloudSignedIn() ? "cloud" : "local";
-  if (projectBar) projectBar.classList.toggle("collapsed", state.projectBarCollapsed);
+  if (projectBar) {
+    projectBar.classList.toggle("collapsed", state.projectBarCollapsed);
+    // Guest mode: the card collapses to its head — connect CTAs live once,
+    // in the fixed bottom auth panel, instead of being repeated here.
+    projectBar.classList.toggle("guest", !connected);
+  }
   if (collapseBtn) {
     collapseBtn.textContent = state.projectBarCollapsed ? "Setup" : "Close setup";
     collapseBtn.setAttribute("aria-expanded", state.projectBarCollapsed ? "false" : "true");

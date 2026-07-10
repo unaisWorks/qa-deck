@@ -366,6 +366,18 @@ body {
   display: none;
 }
 
+/* Guest mode: hide everything but the head. The body's connect prompt and
+   CTA pair duplicate the fixed bottom auth panel, the context chips carry
+   no information ("Guest mode / Locator tools"), and the sync pill repeats
+   the head title. */
+.project-bar.guest .project-bar-body,
+.project-bar.guest .project-context-strip,
+.project-bar.guest .project-collapse-btn,
+.project-bar.guest .project-sync-pill,
+.project-bar.guest .project-page-hint {
+  display: none;
+}
+
 .project-context-strip {
   display: flex;
   flex-wrap: wrap;
@@ -519,12 +531,19 @@ body {
 
 .project-flow-note {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 7px 8px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 8px;
   border-radius: 12px;
   border: 0.5px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.03);
+}
+
+.project-flow-steps-inline {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .project-flow-label {
@@ -2886,17 +2905,17 @@ body.theme-dark {
 }
 
 .auth-panel-copy {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-secondary);
-  line-height: 1.6;
-  text-align: center;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .auth-panel-actions {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin-top: 10px;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .auth-connect-btn {
