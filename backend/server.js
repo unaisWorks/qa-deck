@@ -6250,6 +6250,50 @@ async function handleGenerateCICD(req, res) {
 
 // ─── Page proxy (strips X-Frame-Options, injects capture script) ──────────────
 
+function proxyAssetUrl(rawUrl) {
+  try {
+    const asset = new URL(rawUrl);
+    return `http://localhost:${PORT}/api/proxy-asset/${asset.protocol.replace(":", "")}/${asset.host}${asset.pathname}${asset.search}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+// Rewrites a fetched page's HTML so it can run inside the recorder iframe:
+// strips CSP/refresh meta tags, routes absolute and root-relative asset URLs
+// through the asset proxy, then injects the capture script + base tag LAST —
+// injecting last is required, not stylistic: the injected tags contain an
+// absolute http://localhost URL, and if injected before the rewrite step,
+// that same rewrite regex re-proxies its own tag into a broken,
+// self-referencing URL (this previously broke every site whose JS bundles
+// use bare-relative src paths resolved via <base>, e.g. Angular CLI builds).
+function buildProxiedHtml(html, origin, baseTag, captureScript) {
+  let patched = html.replace(
+    /<meta[^>]+http-equiv=["'](?:content-security-policy|refresh|x-frame-options)["'][^>]*>/gi,
+    ""
+  );
+
+  patched = patched
+    .replace(/(src|href)="(https?:\/\/[^"#?][^"]*)"/gi, (m, attr, u) =>
+      `${attr}="${proxyAssetUrl(u)}"`)
+    .replace(/(src|href)='(https?:\/\/[^'#?][^']*)'/gi, (m, attr, u) =>
+      `${attr}='${proxyAssetUrl(u)}'`);
+
+  patched = patched
+    .replace(/(src|href)="(\/(?!\/)[^"]*)"/gi, (m, attr, path) =>
+      `${attr}="${proxyAssetUrl(origin + path)}"`)
+    .replace(/(src|href)='(\/(?!\/)[^']*)'/gi, (m, attr, path) =>
+      `${attr}='${proxyAssetUrl(origin + path)}'`);
+
+  if (/<head[^>]*>/i.test(patched)) {
+    patched = patched.replace(/(<head[^>]*>)/i, `$1${baseTag}${captureScript}`);
+  } else {
+    patched = baseTag + captureScript + patched;
+  }
+
+  return patched;
+}
+
 async function handleProxy(req, res, url) {
   const target = url.searchParams.get("url");
   if (!target) return jsonResponse(res, 400, { error: "url param required" });
@@ -6346,43 +6390,7 @@ console.log('[QA Deck] Proxy capture active on ${origin}');
 })();
 </script>`;
 
-    const proxyAssetUrl = (rawUrl) => {
-      try {
-        const asset = new URL(rawUrl);
-        return `http://localhost:${PORT}/api/proxy-asset/${asset.protocol.replace(":", "")}/${asset.host}${asset.pathname}${asset.search}`;
-      } catch {
-        return rawUrl;
-      }
-    };
-
-    let patched = html;
-
-    // Strip meta CSP/refresh tags that break proxied SPAs.
-    patched = patched.replace(
-      /<meta[^>]+http-equiv=["'](?:content-security-policy|refresh|x-frame-options)["'][^>]*>/gi,
-      ""
-    );
-
-    // 1. Inject base URL + capture script at top of <head>
-    if (/<head[^>]*>/i.test(patched)) {
-      patched = patched.replace(/(<head[^>]*>)/i, `$1${baseTag}${captureScript}`);
-    } else {
-      patched = baseTag + captureScript + patched;
-    }
-
-    // 2. Rewrite absolute URLs (https://...) → proxy-asset
-    patched = patched
-      .replace(/(src|href)="(https?:\/\/[^"#?][^"]*)"/gi, (m, attr, u) =>
-        `${attr}="${proxyAssetUrl(u)}"`)
-      .replace(/(src|href)='(https?:\/\/[^'#?][^']*)'/gi, (m, attr, u) =>
-        `${attr}='${proxyAssetUrl(u)}'`);
-
-    // 3. Rewrite root-relative URLs (/path/...) → proxy-asset with origin prepended
-    patched = patched
-      .replace(/(src|href)="(\/(?!\/)[^"]*)"/gi, (m, attr, path) =>
-        `${attr}="${proxyAssetUrl(origin + path)}"`)
-      .replace(/(src|href)='(\/(?!\/)[^']*)'/gi, (m, attr, path) =>
-        `${attr}='${proxyAssetUrl(origin + path)}'`);
+    const patched = buildProxiedHtml(html, origin, baseTag, captureScript);
 
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -6537,4 +6545,6 @@ module.exports = {
   readAuthState,
   deleteAuthProfile,
   summarizeAuthProfile,
+  buildProxiedHtml,
+  proxyAssetUrl,
 };
