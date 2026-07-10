@@ -3046,8 +3046,15 @@ body.theme-dark {
 .bug-modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .bug-modal-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .bug-modal-foot {
-  display: flex; gap: 8px; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px;
   border-top: 1px solid var(--border);
+}
+/* Let each button keep its natural width and wrap onto a new row instead
+   of shrinking below its label (which clipped long labels like "Continue
+   on qadeck.com" in the narrow side panel). */
+.bug-modal-foot > button {
+  flex: 1 1 auto;
+  min-width: fit-content;
 }
 .bug-field { display: flex; flex-direction: column; gap: 4px; }
 .bug-field-row { display: flex; gap: 10px; }
