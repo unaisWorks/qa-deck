@@ -400,8 +400,11 @@ const server = http.createServer(async (req, res) => {
 
     // Page proxy — strips X-Frame-Options, injects capture script
     if (req.method === "GET" && url.pathname === "/api/proxy") return await handleProxy(req, res, url);
-    // Proxy asset passthrough — serves CSS/JS/images for proxied pages
-    if (req.method === "GET" && (url.pathname === "/api/proxy-asset" || url.pathname.startsWith("/api/proxy-asset/"))) {
+    // Proxy asset passthrough — serves CSS/JS/images for proxied pages, and
+    // also forwards the proxied page's own XHR/fetch API calls (search,
+    // form submits, etc.), which is why non-GET methods are allowed here.
+    if (["GET", "POST", "PUT", "PATCH", "DELETE"].includes(req.method) &&
+        (url.pathname === "/api/proxy-asset" || url.pathname.startsWith("/api/proxy-asset/"))) {
       return await handleProxyAsset(req, res, url);
     }
 
@@ -6462,7 +6465,20 @@ function handleProxyFetch(url, depth) {
   });
 }
 
-// ─── Asset proxy (fetches CSS/JS/images for proxied pages) ───────────────────
+// Headers worth forwarding from the proxied page's real request. Real APIs
+// (search, forms, auth'd endpoints) commonly reject requests missing these;
+// hop-by-hop / host-identifying headers are deliberately excluded.
+const PROXY_ASSET_FORWARDED_REQUEST_HEADERS = [
+  "content-type",
+  "authorization",
+  "cookie",
+  "x-requested-with",
+  "x-csrf-token",
+  "accept",
+  "accept-language",
+];
+
+// ─── Asset proxy (fetches CSS/JS/images, and forwards real API calls, for proxied pages) ───
 async function handleProxyAsset(req, res, url) {
   let assetUrl = url.searchParams.get("url");
   if (!assetUrl && url.pathname.startsWith("/api/proxy-asset/")) {
@@ -6482,36 +6498,56 @@ async function handleProxyAsset(req, res, url) {
   try {
     const targetUrl = new URL(assetUrl);
     const lib = targetUrl.protocol === "https:" ? require("https") : require("http");
+    const method = (req.method || "GET").toUpperCase();
+    const hasBody = !["GET", "HEAD"].includes(method);
+
+    const forwardHeaders = {
+      "User-Agent": "Mozilla/5.0 Chrome/120",
+      "Referer": targetUrl.origin + "/",
+      "Accept": "*/*",
+    };
+    for (const name of PROXY_ASSET_FORWARDED_REQUEST_HEADERS) {
+      if (req.headers?.[name]) forwardHeaders[name] = req.headers[name];
+    }
+    if (hasBody && req.headers?.["content-length"]) {
+      forwardHeaders["Content-Length"] = req.headers["content-length"];
+    }
+
     await new Promise((resolve, reject) => {
       const request = lib.request({
         hostname: targetUrl.hostname,
+        port:     targetUrl.port || undefined,
         path:     targetUrl.pathname + targetUrl.search,
-        method:   "GET",
-        headers: {
-          "User-Agent": "Mozilla/5.0 Chrome/120",
-          "Referer":    targetUrl.origin + "/",
-          "Accept":     "*/*",
-        },
+        method,
+        headers: forwardHeaders,
       }, (proxyRes) => {
-        // Follow one redirect
-        if ([301,302,303,307,308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+        // Only auto-follow redirects for GET/HEAD — the request body (if any)
+        // has already been streamed and can't be safely replayed.
+        if (!hasBody && [301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
           const loc = new URL(proxyRes.headers.location, assetUrl).toString();
           handleProxyAsset(req, { writeHead: res.writeHead.bind(res), end: res.end.bind(res), write: res.write.bind(res) }, new URL(`http://x/api/proxy-asset?url=${encodeURIComponent(loc)}`));
           resolve(); return;
         }
         const ct = proxyRes.headers["content-type"] || "application/octet-stream";
-        res.writeHead(200, {
+        const responseHeaders = {
           "Content-Type": ct,
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "public, max-age=3600",
-        });
+        };
+        // Only cache real GET asset fetches — never cache API responses.
+        if (!hasBody) responseHeaders["Cache-Control"] = "public, max-age=3600";
+        res.writeHead(proxyRes.statusCode || 200, responseHeaders);
         proxyRes.pipe(res);
         proxyRes.on("end", resolve);
         proxyRes.on("error", reject);
       });
-      request.on("error", (e) => { console.error("[proxy-asset]", e.message); res.writeHead(502); res.end(); reject(e); });
-      request.setTimeout(8000, () => { request.destroy(); res.writeHead(504); res.end(); reject(new Error("timeout")); });
-      request.end();
+      request.on("error", (e) => { console.error("[proxy-asset]", e.message); if (!res.headersSent) res.writeHead(502); res.end(); reject(e); });
+      request.setTimeout(8000, () => { request.destroy(); if (!res.headersSent) res.writeHead(504); res.end(); reject(new Error("timeout")); });
+
+      if (hasBody && typeof req.pipe === "function") {
+        req.pipe(request);
+      } else {
+        request.end();
+      }
     });
   } catch (err) {
     if (!res.headersSent) { res.writeHead(502); res.end(); }
@@ -6547,4 +6583,5 @@ module.exports = {
   summarizeAuthProfile,
   buildProxiedHtml,
   proxyAssetUrl,
+  handleProxyAsset,
 };
