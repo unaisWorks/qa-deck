@@ -27,6 +27,10 @@ const recorderManager = new RecorderSessionManager();
 
 const PORT = process.env.PORT || 3747;
 const PROJECTS_DIR = path.join(__dirname, "projects");
+// Auth profiles hold live session cookies/localStorage. Local-only, gitignored,
+// never sent to Firestore — journeys reference profiles by non-secret id.
+// Overridable via env so tests can use a throwaway dir.
+const AUTH_DIR = process.env.QA_DECK_AUTH_DIR || path.join(__dirname, ".qa-deck-auth");
 const ALLOWED_ORIGINS = [
   "chrome-extension://",       // any chrome extension
   "http://localhost",
@@ -37,6 +41,81 @@ const ALLOWED_ORIGINS = [
 ].filter(Boolean);
 
 if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+
+// ─── Auth profile store (local, secret-bearing) ───────────────────────────────
+
+function ensureAuthDir() {
+  if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+}
+
+// Public metadata only — never includes cookies/localStorage values.
+function summarizeAuthProfile(profile) {
+  const state = profile.storageState || {};
+  const cookieCount = Array.isArray(state.cookies) ? state.cookies.length : 0;
+  const originCount = Array.isArray(state.origins) ? state.origins.length : 0;
+  const localStorageKeys = Array.isArray(state.origins)
+    ? state.origins.reduce((sum, o) => sum + (Array.isArray(o.localStorage) ? o.localStorage.length : 0), 0)
+    : 0;
+  return {
+    id: profile.id,
+    name: profile.name,
+    origin: profile.origin || null,
+    createdAt: profile.createdAt,
+    cookieCount,
+    originCount,
+    localStorageKeys,
+  };
+}
+
+function saveAuthProfile({ name, origin, storageState }) {
+  ensureAuthDir();
+  const id = crypto.randomUUID();
+  const profile = {
+    id,
+    name: String(name || "Saved login").slice(0, 80),
+    origin: origin || null,
+    createdAt: new Date().toISOString(),
+    storageState: storageState || { cookies: [], origins: [] },
+  };
+  fs.writeFileSync(path.join(AUTH_DIR, `${id}.json`), JSON.stringify(profile));
+  return summarizeAuthProfile(profile);
+}
+
+function listAuthProfiles() {
+  ensureAuthDir();
+  return fs.readdirSync(AUTH_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try {
+        return summarizeAuthProfile(JSON.parse(fs.readFileSync(path.join(AUTH_DIR, f), "utf8")));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+}
+
+// Returns the raw storageState for a profile id, or null. Callers must never
+// forward this to the website/Firestore — it is for local run injection only.
+function readAuthState(profileId) {
+  if (!profileId || !/^[a-f0-9-]+$/i.test(profileId)) return null;
+  const file = path.join(AUTH_DIR, `${profileId}.json`);
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")).storageState || null;
+  } catch {
+    return null;
+  }
+}
+
+function deleteAuthProfile(profileId) {
+  if (!profileId || !/^[a-f0-9-]+$/i.test(profileId)) return false;
+  const file = path.join(AUTH_DIR, `${profileId}.json`);
+  if (!fs.existsSync(file)) return false;
+  fs.unlinkSync(file);
+  return true;
+}
 
 
 // Sanitize AI JSON output — strips markdown fences and escapes literal control
@@ -312,6 +391,13 @@ const server = http.createServer(async (req, res) => {
       if (action === "testcases" && req.method === "POST") return await handleRecordTestCases(req, res, sessionId);
     }
 
+    // Auth profiles (local-only login state for run reuse)
+    if (url.pathname === "/api/auth/capture" && req.method === "POST") return await handleAuthCapture(req, res);
+    if (url.pathname === "/api/auth/profiles" && req.method === "GET") return handleAuthProfiles(req, res);
+    if (url.pathname.startsWith("/api/auth/profiles/") && req.method === "DELETE") {
+      return handleAuthDelete(req, res, url.pathname.split("/")[4]);
+    }
+
     // Page proxy — strips X-Frame-Options, injects capture script
     if (req.method === "GET" && url.pathname === "/api/proxy") return await handleProxy(req, res, url);
     // Proxy asset passthrough — serves CSS/JS/images for proxied pages
@@ -418,6 +504,69 @@ def pytest_sessionfinish(session, exitstatus):
         json.dump(payload, handle)
 `;
 
+// Selenium auth loader shipped inside journey bundles. It looks for an
+// auth_state.json that the runner injects at run time; absent that file it is
+// a safe no-op, so generated/stored bundles never carry session secrets.
+const QA_DECK_AUTH_SOURCE = `import json
+import os
+
+_AUTH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_state.json")
+
+
+def has_saved_auth():
+    return os.path.exists(_AUTH_FILE)
+
+
+def apply_saved_auth(driver, base_url=None):
+    """Apply cookies + localStorage from an injected auth_state.json.
+
+    Returns True if any auth data was applied. Safe no-op when the file is
+    absent, so bundles run without a saved login unless the runner injects one.
+    Call this after an initial navigation to the target origin, then reload."""
+    if not os.path.exists(_AUTH_FILE):
+        return False
+    try:
+        with open(_AUTH_FILE) as handle:
+            state = json.load(handle)
+    except Exception:
+        return False
+
+    applied = False
+
+    for cookie in state.get("cookies", []) or []:
+        name = cookie.get("name")
+        if not name:
+            continue
+        entry = {"name": name, "value": cookie.get("value", "")}
+        if cookie.get("path"):
+            entry["path"] = cookie["path"]
+        if cookie.get("domain"):
+            entry["domain"] = cookie["domain"]
+        expires = cookie.get("expires")
+        if isinstance(expires, (int, float)) and expires > 0:
+            entry["expiry"] = int(expires)
+        try:
+            driver.add_cookie(entry)
+            applied = True
+        except Exception:
+            # Domain mismatch before navigation is common; skip and continue.
+            pass
+
+    for origin in state.get("origins", []) or []:
+        for item in origin.get("localStorage", []) or []:
+            try:
+                driver.execute_script(
+                    "window.localStorage.setItem(arguments[0], arguments[1]);",
+                    item.get("name"),
+                    item.get("value"),
+                )
+                applied = True
+            except Exception:
+                pass
+
+    return applied
+`;
+
 const RUN_REPORT_MAX_SCREENSHOT_BYTES = 1.5 * 1024 * 1024;
 const RUN_REPORT_MAX_SCREENSHOTS = 10;
 
@@ -458,7 +607,7 @@ function readRunReport(reportDir) {
 
 async function handleRunTests(req, res) {
   const body = await readBody(req);
-  const { scripts, framework, headless = true } = body;
+  const { scripts, framework, headless = true, authProfileId = null } = body;
 
   if (!scripts?.length) return jsonResponse(res, 400, { error: "scripts array is required" });
   if (!framework)       return jsonResponse(res, 400, { error: "framework is required" });
@@ -556,6 +705,17 @@ async function handleRunTests(req, res) {
     // workspace cwd on sys.path so `-p qa_deck_reporter` resolves.
     fs.writeFileSync(path.join(tmpDir, "qa_deck_reporter.py"), QA_DECK_REPORTER_SOURCE);
     runArgs = [...runCfg.args, "-p", "qa_deck_reporter"];
+
+    // Inject saved login state at run time only (never stored in the bundle).
+    if (authProfileId) {
+      const authState = readAuthState(authProfileId);
+      if (authState) {
+        fs.writeFileSync(path.join(tmpDir, "auth_state.json"), JSON.stringify(authState));
+        sseEvent({ type: "stdout", text: "[QA Deck] Reusing saved login for this run.\n" });
+      } else {
+        sseEvent({ type: "stdout", text: "[QA Deck] Saved login not found on this backend; running without it.\n" });
+      }
+    }
   }
 
   sseEvent({
@@ -4553,12 +4713,23 @@ class BaseTest:
         self.driver.maximize_window()
         self.wait = WebDriverWait(self.driver, 10)
         self.driver.get("${baseUrl}")
+        try:
+            from qa_deck_auth import apply_saved_auth
+            if apply_saved_auth(self.driver, "${baseUrl}"):
+                self.driver.get("${baseUrl}")
+        except Exception:
+            pass
 
     def teardown_method(self):
         if getattr(self, "driver", None):
             self.driver.quit()
         set_active_driver(None)
 `,
+    });
+    files.push({
+      filename: "qa_deck_auth.py",
+      group: "shared",
+      content: QA_DECK_AUTH_SOURCE,
     });
     files.push({
       filename: "conftest.py",
@@ -4578,6 +4749,12 @@ def driver():
     driver = set_active_driver(webdriver.Chrome(options=options))
     driver.maximize_window()
     driver.get("${baseUrl}")
+    try:
+        from qa_deck_auth import apply_saved_auth
+        if apply_saved_auth(driver, "${baseUrl}"):
+            driver.get("${baseUrl}")
+    except Exception:
+        pass
     yield driver
     driver.quit()
     set_active_driver(None)
@@ -5355,6 +5532,47 @@ async function handleRecordStop(req, res, sessionId) {
   } catch (err) {
     jsonResponse(res, 500, { error: "Failed to stop recording: " + err.message });
   }
+}
+
+// Capture the current browser session's cookies/localStorage from a live
+// recorder session and save it as a reusable auth profile.
+async function handleAuthCapture(req, res) {
+  const body = await readBody(req);
+  const { sessionId, name } = body;
+  if (!sessionId) return jsonResponse(res, 400, { error: "sessionId is required" });
+
+  const recorder = recorderManager.getSession(sessionId);
+  if (!recorder) return jsonResponse(res, 404, { error: "Recorder session not found or already stopped" });
+
+  try {
+    const storageState = await recorder.getStorageState();
+    const cookieCount = Array.isArray(storageState?.cookies) ? storageState.cookies.length : 0;
+    if (cookieCount === 0 && !(storageState?.origins || []).some((o) => (o.localStorage || []).length)) {
+      return jsonResponse(res, 422, {
+        error: "No session data captured yet. Complete the login in the browser, then capture.",
+      });
+    }
+    const firstUrl = recorder.getActions().find((a) => a.type === "navigate" && a.url)?.url;
+    let origin = null;
+    try { origin = firstUrl ? new URL(firstUrl).origin : (storageState.origins?.[0]?.origin || null); } catch {}
+
+    const profile = saveAuthProfile({ name, origin, storageState });
+    console.log(`[Auth] Captured profile "${profile.name}" (${profile.cookieCount} cookies, ${profile.localStorageKeys} localStorage keys)`);
+    jsonResponse(res, 200, { success: true, profile });
+  } catch (err) {
+    console.error("[Auth] Capture error:", err.message);
+    jsonResponse(res, 500, { error: "Failed to capture auth state: " + err.message });
+  }
+}
+
+function handleAuthProfiles(req, res) {
+  jsonResponse(res, 200, { success: true, profiles: listAuthProfiles() });
+}
+
+function handleAuthDelete(req, res, profileId) {
+  const ok = deleteAuthProfile(profileId);
+  if (!ok) return jsonResponse(res, 404, { error: "Auth profile not found" });
+  jsonResponse(res, 200, { success: true });
 }
 
 async function handleRecordConvert(req, res, sessionId) {
@@ -6313,4 +6531,10 @@ module.exports = {
   slimJourneySteps,
   readRunReport,
   QA_DECK_REPORTER_SOURCE,
+  QA_DECK_AUTH_SOURCE,
+  saveAuthProfile,
+  listAuthProfiles,
+  readAuthState,
+  deleteAuthProfile,
+  summarizeAuthProfile,
 };

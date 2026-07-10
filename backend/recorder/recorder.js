@@ -252,6 +252,14 @@ class PlaywrightRecorder extends EventEmitter {
 
   // ── Public API ────────────────────────────────────────────────────────────
   getActions() { return [...this.actions]; }
+
+  // Capture cookies + localStorage from the live browser context.
+  // Returns Playwright storageState: { cookies: [...], origins: [{ origin, localStorage }] }.
+  async getStorageState() {
+    if (!this.context) throw new Error("No active recorder context to capture auth from");
+    return this.context.storageState();
+  }
+
   getStatus()  {
     return {
       isRecording:  this.isRecording,

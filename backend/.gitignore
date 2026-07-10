@@ -2,3 +2,5 @@
 .env
 node_modules/
 projects/*.json
+# Saved login state — contains session cookies, never commit
+.qa-deck-auth/
