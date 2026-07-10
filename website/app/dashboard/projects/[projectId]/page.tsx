@@ -568,6 +568,13 @@ export default function ProjectDetailPage() {
   const [copiedLocator, setCopiedLocator] = useState<string | null>(null);
   const [copiedFileId, setCopiedFileId] = useState<string | null>(null);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [authProfiles, setAuthProfiles] = useState<{ id: string; name: string; origin: string | null; cookieCount: number; localStorageKeys: number }[]>([]);
+  const [authProfileId, setAuthProfileId] = useState<string>("");
+  const [captureState, setCaptureState] = useState<"idle" | "opening" | "recording" | "saving">("idle");
+  const [captureSessionId, setCaptureSessionId] = useState<string>("");
+  const [captureUrl, setCaptureUrl] = useState<string>("");
+  const [captureName, setCaptureName] = useState<string>("");
+  const [authCaptureError, setAuthCaptureError] = useState<string>("");
   const [runHeadless, setRunHeadless] = useState(true);
   const [runState, setRunState] = useState<"idle" | "running" | "done" | "error" | "stopped">("idle");
   const [runOutput, setRunOutput] = useState<{ type: string; text: string }[]>([]);
@@ -689,7 +696,75 @@ export default function ProjectDetailPage() {
     if (!user || !selectedProjectId) return;
     loadBundle();
     fetch(`${BACKEND_URL}/api/health`).then(r => { if (r.ok) setBackendOnline(true); }).catch(() => {});
+    refreshAuthProfiles();
   }, [user, selectedProjectId]);
+
+  async function refreshAuthProfiles() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/profiles`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setAuthProfiles(Array.isArray(data.profiles) ? data.profiles : []);
+    } catch {
+      // Local backend offline or no profiles — selector simply stays hidden.
+    }
+  }
+
+  async function handleStartCapture() {
+    const startUrl = captureUrl.trim();
+    if (!startUrl) { setAuthCaptureError("Enter the login page URL first."); return; }
+    setAuthCaptureError("");
+    setCaptureState("opening");
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/record/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.sessionId) throw new Error(data.error || "Could not open the capture browser");
+      setCaptureSessionId(data.sessionId);
+      setCaptureState("recording");
+    } catch (err) {
+      setAuthCaptureError(err instanceof Error ? err.message : "Failed to start capture");
+      setCaptureState("idle");
+    }
+  }
+
+  async function handleSaveCapture() {
+    if (!captureSessionId) return;
+    setCaptureState("saving");
+    setAuthCaptureError("");
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: captureSessionId, name: captureName.trim() || "Saved login" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.profile) throw new Error(data.error || "Capture failed");
+      // Stop the recorder browser now that state is saved.
+      fetch(`${BACKEND_URL}/api/record/${captureSessionId}/stop`, { method: "POST" }).catch(() => {});
+      await refreshAuthProfiles();
+      setAuthProfileId(data.profile.id);
+      setCaptureState("idle");
+      setCaptureSessionId("");
+      setCaptureUrl("");
+      setCaptureName("");
+    } catch (err) {
+      setAuthCaptureError(err instanceof Error ? err.message : "Failed to save login");
+      setCaptureState("recording");
+    }
+  }
+
+  function handleCancelCapture() {
+    if (captureSessionId) {
+      fetch(`${BACKEND_URL}/api/record/${captureSessionId}/stop`, { method: "POST" }).catch(() => {});
+    }
+    setCaptureState("idle");
+    setCaptureSessionId("");
+    setAuthCaptureError("");
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -955,7 +1030,7 @@ export default function ProjectDetailPage() {
       const resp = await fetch(`${BACKEND_URL}/api/run-tests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scripts, framework, headless: runHeadless }),
+        body: JSON.stringify({ scripts, framework, headless: runHeadless, authProfileId: authProfileId || undefined }),
         signal: controller.signal,
       });
       if (!resp.body) throw new Error("No response body");
@@ -2948,6 +3023,27 @@ export default function ProjectDetailPage() {
                       <p className="text-sm text-white/40 mt-1">Run the latest generated script bundle and watch live results as each case finishes.</p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {authProfiles.length > 0 && (
+                        <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                          <span className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/35 border-r border-white/10">
+                            Login
+                          </span>
+                          <select
+                            value={authProfileId}
+                            onChange={(e) => setAuthProfileId(e.target.value)}
+                            disabled={runState === "running"}
+                            title="Reuse a saved login for this run"
+                            className="bg-transparent px-3 py-1.5 text-xs font-semibold text-white/80 outline-none disabled:opacity-60 max-w-[180px]"
+                          >
+                            <option value="" className="bg-bg-card">No saved login</option>
+                            {authProfiles.map((p) => (
+                              <option key={p.id} value={p.id} className="bg-bg-card">
+                                {p.name} ({p.cookieCount} cookies)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 overflow-hidden">
                         <span className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/35 border-r border-white/10">
                           Headless
@@ -2989,6 +3085,86 @@ export default function ProjectDetailPage() {
                         </button>
                       )}
                     </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 mb-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-white/80">Saved logins</div>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          Record a login once and reuse it so journey runs start authenticated. Stored only on your local backend.
+                        </p>
+                      </div>
+                      {captureState === "idle" && (
+                        <button
+                          onClick={() => { setCaptureState("recording"); setCaptureSessionId(""); setAuthCaptureError(""); }}
+                          disabled={!backendOnline}
+                          title={backendOnline ? "Capture a login" : "Start the local backend to capture logins"}
+                          className="text-xs px-3 py-1.5 rounded-xl border border-white/10 text-white/60 hover:text-white transition-colors disabled:opacity-50"
+                        >
+                          + Capture login
+                        </button>
+                      )}
+                    </div>
+                    {captureState !== "idle" && (
+                      <div className="mt-3 grid gap-2">
+                        {!captureSessionId ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="url"
+                              value={captureUrl}
+                              onChange={(e) => setCaptureUrl(e.target.value)}
+                              placeholder="https://app.example.com/login"
+                              className="flex-1 min-w-[220px] bg-white/5 border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-green"
+                            />
+                            <button
+                              onClick={handleStartCapture}
+                              disabled={captureState === "opening"}
+                              className="text-xs px-3 py-2 rounded-xl bg-green text-white font-semibold hover:bg-green/80 transition-colors disabled:opacity-60"
+                            >
+                              {captureState === "opening" ? "Opening browser…" : "Open login browser"}
+                            </button>
+                            <button onClick={handleCancelCapture} className="text-xs px-3 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white transition-colors">
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-white/55 flex-1 min-w-[200px]">
+                              A browser opened — log in there, then name and save this session.
+                            </span>
+                            <input
+                              type="text"
+                              value={captureName}
+                              onChange={(e) => setCaptureName(e.target.value)}
+                              placeholder="e.g. Admin user"
+                              className="w-40 bg-white/5 border border-border rounded-xl px-3 py-2 text-xs outline-none focus:border-green"
+                            />
+                            <button
+                              onClick={handleSaveCapture}
+                              disabled={captureState === "saving"}
+                              className="text-xs px-3 py-2 rounded-xl bg-green text-white font-semibold hover:bg-green/80 transition-colors disabled:opacity-60"
+                            >
+                              {captureState === "saving" ? "Saving…" : "✓ Save login"}
+                            </button>
+                            <button onClick={handleCancelCapture} className="text-xs px-3 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white transition-colors">
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                        {authCaptureError && <p className="text-xs text-red-300">{authCaptureError}</p>}
+                      </div>
+                    )}
+                    {authProfiles.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {authProfiles.map((p) => (
+                          <span key={p.id} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/55">
+                            {p.name}
+                            <span className="text-white/30">· {p.cookieCount}c</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mb-4">
