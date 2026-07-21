@@ -3570,6 +3570,7 @@ function _collectElements(pageData) {
   for (const form of (pageData?.forms || [])) for (const field of (form.fields || [])) add(field);
   for (const el of (pageData?.inputs || [])) add(el);
   for (const btn of (pageData?.buttons || [])) add(btn);
+  for (const link of (pageData?.links || [])) if (!link.isExternal) add(link);
   return all;
 }
 
@@ -3678,7 +3679,7 @@ function buildTestsOnlyPrompt(testCases, pageData, framework, pageObjectFilename
   const ext = isJava ? "java" : isTs ? "ts" : "py";
   const baseUrl = pageData?.meta?.url || "https://example.com";
   const filename = options.outputFilename || `test_${_toSnake(pageType)}.${ext}`;
-  const slim = (testCases || []).slice(0, 15).map(tc => ({ id: tc.id, title: tc.title, steps: tc.steps, expectedResult: tc.expectedResult, testData: tc.testData || {}, customAssertions: tc.customAssertions || [] }));
+  const slim = (testCases || []).slice(0, 15).map(tc => ({ id: tc.id, title: tc.title, steps: tc.steps, expectedResult: tc.expectedResult, locators: tc.locators || {}, testData: tc.testData || {}, customAssertions: tc.customAssertions || [] }));
 
   const netSection = networkCalls?.length
     ? `\nNETWORK CALLS TO ASSERT:\n${networkCalls.map((n, i) => { try { return `${i+1}. ${n.method} ${new URL(n.url).pathname} → ${n.statusCode}`; } catch { return `${i+1}. ${n.method} ${n.url} → ${n.statusCode}`; } }).join("\n")}\n`
@@ -3738,6 +3739,7 @@ Rules:
 - One test method per test case named test_{id}_{snake_title}
 - Use page = self.page inside each test method
 - Use ONLY the page object methods listed above for interactions
+- Each test case's "locators" field names the exact element(s) that test targets — pick the page object method whose method name matches that locator's key (e.g. locators.navigation_link → the method built from that link's label, NOT an unrelated search/menu/dropdown method). Never substitute a different control just because it is more prominent in the method list.
 - Assertions must be valid Selenium Python (WebDriverWait, EC, element text/state checks)
 - No time.sleep
 - No TODOs, pass statements, or empty method bodies
@@ -3762,6 +3764,7 @@ ${JSON.stringify(slim, null, 2)}
 Rules:
 - One test method per test case named test_{id}_{snake_title}
 - Use ONLY the page object methods listed above for all interactions
+- Each test case's "locators" field names the exact element(s) that test targets — pick the page object method whose method name matches that locator's key. Never substitute a different control just because it is more prominent in the method list.
 - Assertions: WebDriverWait + EC (Selenium) or expect() (Playwright) — no time.sleep
 - Test data from TEST_DATA/testData imports — no hardcoded credentials
 - Each test is fully independent (setup in setup_method / beforeEach)
