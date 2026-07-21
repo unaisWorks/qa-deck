@@ -2747,6 +2747,7 @@ function buildGroundedTestCaseCandidates(pageData, exploratoryMode = false) {
   const links = Array.isArray(pageData?.links) ? pageData.links.filter((link) => !link.isExternal) : [];
   const tables = Array.isArray(pageData?.tables) ? pageData.tables : [];
   const alerts = Array.isArray(pageData?.alerts) ? pageData.alerts : [];
+  const inputs = Array.isArray(pageData?.inputs) ? pageData.inputs.filter((input) => !input.disabled) : [];
   const candidates = [];
   let sequence = 1;
 
@@ -2887,7 +2888,7 @@ function buildGroundedTestCaseCandidates(pageData, exploratoryMode = false) {
     }
   }
 
-  for (const link of links.slice(0, exploratoryMode ? 2 : 3)) {
+  for (const link of links.slice(0, exploratoryMode ? 2 : 5)) {
     pushCandidate(buildGroundedCandidate(nextId(), {
       title: `Verify navigation for ${link.text || link.path || "internal link"}`,
       category: "navigation",
@@ -2903,6 +2904,92 @@ function buildGroundedTestCaseCandidates(pageData, exploratoryMode = false) {
       locators: { navigation_link: link.locator },
       tags: [pageType, "navigation"],
     }, { coverage: "navigation", polarity: "positive", path: link.path || link.href || "" }));
+  }
+
+  for (const input of inputs.slice(0, exploratoryMode ? 2 : 3)) {
+    const isSearch = /search/i.test(`${input.type} ${input.placeholder} ${input.label} ${input.ariaLabel}`);
+    const fieldName = input.label || input.ariaLabel || input.placeholder || input.name || (isSearch ? "search" : "input");
+    const valid = deriveFieldTestValue(input, "valid");
+
+    if (isSearch) {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify ${fieldName} returns matching results for a valid query`,
+        category: "functional",
+        priority: "high",
+        packs: ["smoke", "regression"],
+        preconditions: `The ${fieldName} field is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Enter a valid query into the ${fieldName} field.`,
+          "3. Submit or trigger the search.",
+        ],
+        expectedResult: "Results relevant to the query are displayed, or a clear no-results state is shown.",
+        locators: { search_input: input.locator },
+        testData: { query: valid.value },
+        tags: [pageType, "search"],
+      }, { coverage: "search", polarity: "positive" }));
+
+      if (!exploratoryMode) {
+        pushCandidate(buildGroundedCandidate(nextId(), {
+          title: `Verify ${fieldName} handles a query with no matching results`,
+          category: "negative",
+          priority: "medium",
+          packs: ["regression"],
+          preconditions: `The ${fieldName} field is visible on ${url}.`,
+          steps: [
+            `1. Open ${url}.`,
+            `2. Enter a query that matches no results into the ${fieldName} field.`,
+            "3. Submit or trigger the search.",
+          ],
+          expectedResult: 'A clear "no results" state is shown instead of an error or a blank screen.',
+          locators: { search_input: input.locator },
+          testData: { query: "zzznonexistentquery123" },
+          tags: [pageType, "search", "no-results"],
+        }, { coverage: "search_empty", polarity: "negative" }));
+      }
+    } else {
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify ${fieldName} accepts a valid value`,
+        category: "functional",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: `The ${fieldName} field is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Enter a valid value into the ${fieldName} field.`,
+          "3. Verify the page responds to the input as expected.",
+        ],
+        expectedResult: `The ${fieldName} field accepts the value and the page reflects the change.`,
+        locators: { input_field: input.locator },
+        testData: { value: valid.value },
+        tags: [pageType, "input"],
+      }, { coverage: "standalone_input", polarity: "positive" }));
+    }
+  }
+
+  {
+    const coveredButtonLocators = new Set([submitButton?.locator].filter(Boolean));
+    const standaloneButtons = buttons.filter(
+      (button) => !button.disabled && button.locator && !coveredButtonLocators.has(button.locator)
+    );
+    for (const button of standaloneButtons.slice(0, exploratoryMode ? 2 : 4)) {
+      const label = button.text || button.ariaLabel || "control";
+      pushCandidate(buildGroundedCandidate(nextId(), {
+        title: `Verify ${label} performs the expected action`,
+        category: "functional",
+        priority: "medium",
+        packs: ["regression"],
+        preconditions: `The ${label} control is visible on ${url}.`,
+        steps: [
+          `1. Open ${url}.`,
+          `2. Click the ${label} control.`,
+          "3. Observe the resulting page state or navigation.",
+        ],
+        expectedResult: `Clicking ${label} performs its expected action without errors.`,
+        locators: { control: button.locator },
+        tags: [pageType, "interaction"],
+      }, { coverage: "standalone_button", polarity: "positive" }));
+    }
   }
 
   for (const table of tables.slice(0, 1)) {
@@ -3000,7 +3087,7 @@ function buildGroundedTestCaseCandidates(pageData, exploratoryMode = false) {
   }
 
   return {
-    candidates: candidates.slice(0, exploratoryMode ? 12 : 14),
+    candidates: candidates.slice(0, exploratoryMode ? 16 : 22),
     coverageAreas: Array.from(new Set(candidates.map((candidate) => candidate.__qadeckMeta?.coverage).filter(Boolean))),
   };
 }
