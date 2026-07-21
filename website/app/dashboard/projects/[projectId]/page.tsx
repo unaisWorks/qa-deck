@@ -3071,7 +3071,8 @@ export default function ProjectDetailPage() {
                       </div>
                       <button
                         onClick={handleRunTests}
-                        disabled={runState === "running" || bundle.artifacts.scriptFiles.length === 0}
+                        disabled={runState === "running" || bundle.artifacts.scriptFiles.length === 0 || !backendOnline}
+                        title={backendOnline ? undefined : "Start the local backend to run tests (see below)"}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-green text-white text-xs font-semibold hover:bg-green/80 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {runState === "running" ? (<><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Running…</>) : "▶ Run Tests"}
@@ -3086,6 +3087,18 @@ export default function ProjectDetailPage() {
                       )}
                     </div>
                   </div>
+
+                  {!backendOnline && (
+                    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 mb-4">
+                      <div className="text-sm font-medium text-amber-200">Local backend offline</div>
+                      <p className="text-xs text-amber-200/70 mt-0.5">
+                        Running tests, saving logins, and capture all execute on your machine, not in the cloud. Start the local backend, then reload this page:
+                      </p>
+                      <code className="block mt-2 text-xs text-amber-100 bg-black/30 rounded-lg px-3 py-2 font-mono">
+                        cd backend &amp;&amp; node server.js
+                      </code>
+                    </div>
+                  )}
 
                   <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 mb-4">
                     <div className="flex items-center justify-between gap-3">
