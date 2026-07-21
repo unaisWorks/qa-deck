@@ -62,6 +62,9 @@ export default function Navbar() {
           <Link href="/download" className="text-sm text-white/60 hover:text-white transition-colors">
             Download
           </Link>
+          <Link href="/prompts" className="text-sm text-white/60 hover:text-white transition-colors">
+            Prompts
+          </Link>
           <a
             href="https://github.com/unaisLearning/qa-deck"
             target="_blank"
