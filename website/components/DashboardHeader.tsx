@@ -16,6 +16,7 @@ interface DashboardHeaderProps {
 const NAV_ITEMS = [
   { href: "/dashboard/projects", label: "Projects" },
   { href: "/dashboard/suites", label: "Suites" },
+  { href: "/prompts", label: "Prompts" },
 ];
 
 export default function DashboardHeader({

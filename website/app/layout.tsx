@@ -1,5 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+// Pre-existing gap, unrelated to this PR's feature: there was no viewport
+// meta tag anywhere in the app, on any page, so mobile browsers rendered
+// every page at a wide desktop-assumption layout viewport (~980px) and
+// scaled it down, rather than actually laying out at device width. Without
+// this, "responsive down to mobile" cannot hold on any page in the site.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "QA Deck — AI-Powered Test Automation",

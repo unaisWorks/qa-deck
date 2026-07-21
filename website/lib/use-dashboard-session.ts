@@ -7,7 +7,17 @@ import { disconnectExtensionSession } from "@/lib/extension-bridge";
 import { auth } from "@/lib/firebase";
 import { signOut } from "@/lib/auth";
 
-export function useDashboardSession() {
+export interface UseDashboardSessionOptions {
+  /**
+   * When false, signed-out visitors are left with user=null instead of being
+   * redirected to /signin. Defaults to true so every existing call site
+   * (which relies on the redirect) keeps its current behavior unchanged.
+   */
+  redirectOnSignedOut?: boolean;
+}
+
+export function useDashboardSession(options: UseDashboardSessionOptions = {}) {
+  const { redirectOnSignedOut = true } = options;
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -15,7 +25,7 @@ export function useDashboardSession() {
 
   useEffect(() => {
     if (!auth) {
-      router.replace("/signin");
+      if (redirectOnSignedOut) router.replace("/signin");
       setReady(true);
       return;
     }
@@ -26,7 +36,7 @@ export function useDashboardSession() {
       if (settled) return;
       const nextUser = firebaseAuth.currentUser;
       if (!nextUser) {
-        router.replace("/signin");
+        if (redirectOnSignedOut) router.replace("/signin");
         setUser(null);
       } else {
         setUser(nextUser);
@@ -38,7 +48,7 @@ export function useDashboardSession() {
       settled = true;
       window.clearTimeout(fallbackTimer);
       if (!nextUser) {
-        router.replace("/signin");
+        if (redirectOnSignedOut) router.replace("/signin");
         setUser(null);
         setReady(true);
         return;
@@ -53,7 +63,7 @@ export function useDashboardSession() {
       window.clearTimeout(fallbackTimer);
       unsubscribe();
     };
-  }, [router]);
+  }, [router, redirectOnSignedOut]);
 
   async function handleSignOut() {
     if (signingOut) return;
