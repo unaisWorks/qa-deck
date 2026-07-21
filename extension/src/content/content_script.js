@@ -206,8 +206,6 @@ function extractPage() {
   };
 }
 
-}
-
 // ─── Performance Metrics ──────────────────────────────────────────────────────
 
 function extractPerformanceMetrics() {
@@ -1489,3 +1487,5 @@ function clearCoverageHeatmap() {
 }
 
 console.log("[QA Deck] Content script loaded on", window.location.href);
+
+}
