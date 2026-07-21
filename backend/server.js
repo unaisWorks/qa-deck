@@ -1109,12 +1109,20 @@ class LazyElements:
         return len(self._resolve())
 
 
-class BaseTest:
-    """Base test class — browser setup and teardown."""
+class BasePage:
+    """Base class for page objects — resolves the active Selenium driver."""
 
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+
+class BaseTest:
+    """Base test class — browser setup and teardown.
+
+    Deliberately has no __init__: pytest refuses to collect any test class
+    that defines one, so setup/teardown do all the driver wiring instead.
+    """
 
     def setup_method(self):
         """Launch Chrome before each test."""
@@ -1140,6 +1148,7 @@ class BaseTest:
       content: `[pytest]
 addopts = -v --tb=short --junit-xml=report.xml
 testpaths = tests
+pythonpath = .
 `,
     };
   }
@@ -1170,6 +1179,7 @@ def page():
       content: `[pytest]
 addopts = -v --tb=short --junit-xml=report.xml
 testpaths = tests
+pythonpath = .
 `,
     };
   }
@@ -1527,12 +1537,20 @@ class LazyElements:
         return len(self._resolve())
 
 
-class BaseTest:
-    """Shared Selenium setup for the ${projectName || "QA Deck"} project bundle."""
+class BasePage:
+    """Base class for page objects — resolves the active Selenium driver."""
 
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+
+class BaseTest:
+    """Shared Selenium setup for the ${projectName || "QA Deck"} project bundle.
+
+    Deliberately has no __init__: pytest refuses to collect any test class
+    that defines one, so setup/teardown do all the driver wiring instead.
+    """
 
     def setup_method(self):
         options = Options()
@@ -1552,7 +1570,7 @@ class BaseTest:
     },
     { filename: "conftest.py", key: "config", content: buildRuntimePythonConftest() },
     { filename: "tests/conftest.py", key: "config", content: buildRuntimePythonConftest() },
-    { filename: "pytest.ini", key: "config", content: `[pytest]\naddopts = -v --tb=short --junit-xml=report.xml\ntestpaths = tests\n` },
+    { filename: "pytest.ini", key: "config", content: `[pytest]\naddopts = -v --tb=short --junit-xml=report.xml\ntestpaths = tests\npythonpath = .\n` },
     { filename: "requirements.txt", key: "requirements", content: buildPythonRequirementsContent() },
     { filename: "pages/__init__.py", key: "package", content: "" },
     { filename: "data/__init__.py", key: "package", content: "" },
@@ -3565,7 +3583,7 @@ function _genSelPy(elements, className, url) {
     if (at === "checkbox") return `\n    def check_${n}(self):\n        el = self.wait.until(EC.element_to_be_clickable(self.${C}))\n        if not el.is_selected(): el.click()\n\n    def uncheck_${n}(self):\n        el = self.wait.until(EC.element_to_be_clickable(self.${C}))\n        if el.is_selected(): el.click()`;
     return `\n    def click_${n}(self):\n        self.wait.until(EC.element_to_be_clickable(self.${C})).click()`;
   }).join("\n");
-  return `from selenium.webdriver.common.by import By\nfrom selenium.webdriver.support import expected_conditions as EC\nfrom selenium.webdriver.support.ui import WebDriverWait\nfrom base_test import BaseTest, resolve_driver\n\n\nclass ${className}(BaseTest):\n    """Page Object for ${url}"""\n\n    # ── Locators ──────────────────────────────────────────────────────────────\n${locs}\n\n    # ── Actions ───────────────────────────────────────────────────────────────${methods}\n`;
+  return `from selenium.webdriver.common.by import By\nfrom selenium.webdriver.support import expected_conditions as EC\nfrom selenium.webdriver.support.ui import WebDriverWait\nfrom base_test import BasePage, resolve_driver\n\n\nclass ${className}(BasePage):\n    """Page Object for ${url}"""\n\n    # ── Locators ──────────────────────────────────────────────────────────────\n${locs}\n\n    # ── Actions ───────────────────────────────────────────────────────────────${methods}\n`;
 }
 
 function _genPwPy(elements, className, url) {
@@ -4788,12 +4806,20 @@ class LazyElements:
         return len(self._resolve())
 
 
-class BaseTest:
-    """Shared Selenium setup for QA Deck journeys."""
+class BasePage:
+    """Base class for page objects — resolves the active Selenium driver."""
 
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+
+class BaseTest:
+    """Shared Selenium setup for QA Deck journeys.
+
+    Deliberately has no __init__: pytest refuses to collect any test class
+    that defines one, so setup/teardown do all the driver wiring instead.
+    """
 
     def setup_method(self):
         options = Options()
@@ -4856,6 +4882,7 @@ def driver():
       content: `[pytest]
 addopts = -v --tb=short --junit-xml=report.xml
 testpaths = tests
+pythonpath = .
 `,
     });
     files.push({
@@ -4889,6 +4916,7 @@ def page():
       content: `[pytest]
 addopts = -v --tb=short --junit-xml=report.xml
 testpaths = tests
+pythonpath = .
 `,
     });
     files.push({
