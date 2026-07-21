@@ -1041,6 +1041,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException
+import time
 
 
 _ACTIVE_DRIVER = None
@@ -1115,6 +1117,20 @@ class BasePage:
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+    def safe_click(self, locator, retries=3):
+        """Click an element, retrying if a transient overlay (loading spinner,
+        animating modal, etc.) intercepts the click."""
+        last_err = None
+        for attempt in range(retries):
+            try:
+                el = self.wait.until(EC.element_to_be_clickable(locator))
+                el.click()
+                return el
+            except (ElementClickInterceptedException, StaleElementReferenceException) as err:
+                last_err = err
+                time.sleep(0.5 * (attempt + 1))
+        raise last_err
 
 
 class BaseTest:
@@ -1469,6 +1485,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException
+import time
 
 
 _ACTIVE_DRIVER = None
@@ -1543,6 +1561,20 @@ class BasePage:
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+    def safe_click(self, locator, retries=3):
+        """Click an element, retrying if a transient overlay (loading spinner,
+        animating modal, etc.) intercepts the click."""
+        last_err = None
+        for attempt in range(retries):
+            try:
+                el = self.wait.until(EC.element_to_be_clickable(locator))
+                el.click()
+                return el
+            except (ElementClickInterceptedException, StaleElementReferenceException) as err:
+                last_err = err
+                time.sleep(0.5 * (attempt + 1))
+        raise last_err
 
 
 class BaseTest:
@@ -3579,10 +3611,10 @@ function _genSelPy(elements, className, url) {
   const methods = elements.map(el => {
     const C = _toScreaming(_elLabel(el)), at = _actionType(el), n = _toSnake(_elLabel(el)), lbl = _elLabel(el);
     if (at === "fill") return `\n    def enter_${n}(self, value: str):\n        """Enter text in ${lbl}."""\n        el = self.wait.until(EC.element_to_be_clickable(self.${C}))\n        el.clear()\n        el.send_keys(value)`;
-    if (at === "click") return `\n    def click_${n}(self):\n        """Click ${lbl}."""\n        self.wait.until(EC.element_to_be_clickable(self.${C})).click()`;
+    if (at === "click") return `\n    def click_${n}(self):\n        """Click ${lbl}."""\n        self.safe_click(self.${C})`;
     if (at === "select") return `\n    def select_${n}(self, option: str):\n        from selenium.webdriver.support.ui import Select\n        Select(self.wait.until(EC.visibility_of_element_located(self.${C}))).select_by_visible_text(option)`;
     if (at === "checkbox") return `\n    def check_${n}(self):\n        el = self.wait.until(EC.element_to_be_clickable(self.${C}))\n        if not el.is_selected(): el.click()\n\n    def uncheck_${n}(self):\n        el = self.wait.until(EC.element_to_be_clickable(self.${C}))\n        if el.is_selected(): el.click()`;
-    return `\n    def click_${n}(self):\n        self.wait.until(EC.element_to_be_clickable(self.${C})).click()`;
+    return `\n    def click_${n}(self):\n        self.safe_click(self.${C})`;
   }).join("\n");
   return `from selenium.webdriver.common.by import By\nfrom selenium.webdriver.support import expected_conditions as EC\nfrom selenium.webdriver.support.ui import WebDriverWait\nfrom base_test import BasePage, resolve_driver\n\n\nclass ${className}(BasePage):\n    """Page Object for ${url}"""\n\n    # ── Locators ──────────────────────────────────────────────────────────────\n${locs}\n\n    # ── Actions ───────────────────────────────────────────────────────────────${methods}\n`;
 }
@@ -4741,6 +4773,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import ElementClickInterceptedException, StaleElementReferenceException
+import time
 
 
 _ACTIVE_DRIVER = None
@@ -4815,6 +4849,20 @@ class BasePage:
     def __init__(self, driver=None):
         self.driver = resolve_driver(driver)
         self.wait = WebDriverWait(self.driver, 10) if self.driver else None
+
+    def safe_click(self, locator, retries=3):
+        """Click an element, retrying if a transient overlay (loading spinner,
+        animating modal, etc.) intercepts the click."""
+        last_err = None
+        for attempt in range(retries):
+            try:
+                el = self.wait.until(EC.element_to_be_clickable(locator))
+                el.click()
+                return el
+            except (ElementClickInterceptedException, StaleElementReferenceException) as err:
+                last_err = err
+                time.sleep(0.5 * (attempt + 1))
+        raise last_err
 
 
 class BaseTest:

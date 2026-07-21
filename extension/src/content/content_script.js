@@ -558,7 +558,12 @@ function extractButtons() {
     .filter(isVisible)
     .map((el) => ({
       text: el.textContent.trim().slice(0, 100),
-      type: el.type || el.tagName.toLowerCase(),
+      // el.type defaults to "submit" for a bare <button> even outside any <form> (HTML spec
+      // quirk) — that default is only meaningful inside a form, so outside one we report the
+      // element's real (non-submitting) nature instead of a misleading "submit".
+      type: el.tagName.toLowerCase() === "button"
+        ? (el.getAttribute("type") || (el.closest("form") ? "submit" : "button"))
+        : (el.type || el.tagName.toLowerCase()),
       id: el.id || null,
       ariaLabel: el.getAttribute("aria-label") || null,
       disabled: el.disabled || el.getAttribute("aria-disabled") === "true",
@@ -906,9 +911,12 @@ function buildCSSSelector(el) {
       part += "." + stableClasses.slice(0, 2).join(".");
     }
 
-    // Add type attribute for inputs
-    if (current.type && current.type !== "text") {
-      part += `[type="${current.type}"]`;
+    // Add type attribute for inputs — use the real attribute, not the IDL property
+    // (el.type defaults to "submit" for a bare <button>/<input> even when no type
+    // attribute is actually present, which would build a selector that matches nothing)
+    const explicitType = current.getAttribute("type");
+    if (explicitType && explicitType !== "text") {
+      part += `[type="${explicitType}"]`;
     }
 
     // Check uniqueness
