@@ -695,8 +695,26 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!user || !selectedProjectId) return;
     loadBundle();
-    fetch(`${BACKEND_URL}/api/health`).then(r => { if (r.ok) setBackendOnline(true); }).catch(() => {});
     refreshAuthProfiles();
+
+    // One-shot checks miss the common case where the user starts the local
+    // backend after this page has already loaded. Poll until it answers.
+    let cancelled = false;
+    const checkBackendHealth = () => {
+      fetch(`${BACKEND_URL}/api/health`)
+        .then(r => { if (!cancelled && r.ok) setBackendOnline(true); })
+        .catch(() => {});
+    };
+    checkBackendHealth();
+    const interval = setInterval(() => {
+      if (cancelled) return;
+      setBackendOnline((online) => {
+        if (!online) checkBackendHealth();
+        return online;
+      });
+    }, 4000);
+
+    return () => { cancelled = true; clearInterval(interval); };
   }, [user, selectedProjectId]);
 
   async function refreshAuthProfiles() {
@@ -3092,7 +3110,7 @@ export default function ProjectDetailPage() {
                     <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 mb-4">
                       <div className="text-sm font-medium text-amber-200">Local backend offline</div>
                       <p className="text-xs text-amber-200/70 mt-0.5">
-                        Running tests, saving logins, and capture all execute on your machine, not in the cloud. Start the local backend, then reload this page:
+                        Running tests, saving logins, and capture all execute on your machine, not in the cloud. Start the local backend — this page will pick it up automatically within a few seconds:
                       </p>
                       <code className="block mt-2 text-xs text-amber-100 bg-black/30 rounded-lg px-3 py-2 font-mono">
                         cd backend &amp;&amp; node server.js
