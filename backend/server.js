@@ -617,7 +617,7 @@ async function handleRunTests(req, res) {
 
   // SSE headers — no Content-Length so we can stream
   const origin = req.headers.origin || "";
-  const allowed = ["chrome-extension://", "http://localhost", "http://127.0.0.1"].some(o => origin.startsWith(o));
+  const allowed = ALLOWED_ORIGINS.some(o => origin.startsWith(o));
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
