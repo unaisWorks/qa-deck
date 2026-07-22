@@ -46,6 +46,17 @@ Every prompt follows the same architecture. If you add cards later, follow this 
 
 **When to use:** Before writing a single test case. Catches defects at the cheapest possible stage.
 **You'll need:** Requirement doc / user story / PRD
+**Category:** Requirements & Analysis
+**Subcategory:** Ambiguity Analysis
+**Tags:** Requirements, Manual, Planning, Risk
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 5
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `REQUIREMENT_DOC` — Requirement doc / user story / PRD
 
 ```
 Act as a senior QA analyst reviewing requirements before test design begins.
@@ -87,6 +98,21 @@ Now produce the ambiguity table, highest risk first.
 
 **When to use:** Start of a release or project, when a signed-off plan document is required.
 **You'll need:** Requirement doc + **your company's test plan template**
+**Category:** Requirements & Analysis
+**Subcategory:** Test Planning
+**Tags:** Requirements, Planning, Documentation
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 30-45 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
+**Variables:**
+- `PROJECT_NAME` — Project name
+- `RELEASE` — Release / sprint
+- `TEAM_SIZE_AND_DURATION` — Team size & timeline
+- `YOUR_TEST_PLAN_TEMPLATE` — Your test plan template
+- `REQUIREMENT_DOC` — Requirement doc
 
 ```
 Act as a test lead drafting a test plan for stakeholder sign-off.
@@ -131,6 +157,15 @@ Now produce the test plan following the template exactly, marking unknowns as TB
 
 **When to use:** Defining *how* your org tests — broader and longer-lived than a per-project plan.
 **You'll need:** Product description, tech stack, team context
+**Category:** Requirements & Analysis
+**Subcategory:** Test Strategy
+**Tags:** Requirements, Planning, Strategy
+**Testing type:** Manual
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 30-45 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA architect defining a test strategy.
@@ -171,6 +206,15 @@ Now produce the test strategy.
 
 **When to use:** Sprint planning, release planning, or when asked "how long will testing take?"
 **You'll need:** Scope list / backlog items
+**Category:** Requirements & Analysis
+**Subcategory:** Estimation
+**Tags:** Planning, Estimation
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a test lead producing an estimate for planning.
@@ -206,6 +250,15 @@ Now produce the estimate table, then a total with buffer.
 
 **When to use:** When there isn't time to test everything — which is always.
 **You'll need:** Feature list + any known defect history
+**Category:** Requirements & Analysis
+**Subcategory:** Risk Assessment
+**Tags:** Risk, Planning, Prioritization
+**Testing type:** Manual
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA lead applying risk-based testing.
@@ -244,6 +297,15 @@ Now produce the risk table, highest score first.
 
 **When to use:** Audit, compliance, or proving coverage to stakeholders.
 **You'll need:** Requirement IDs + test case IDs
+**Category:** Requirements & Analysis
+**Subcategory:** Traceability
+**Tags:** Requirements, Traceability, Coverage
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA analyst building a Requirements Traceability Matrix.
@@ -282,6 +344,15 @@ Now produce the RTM, then the uncovered and orphan sections.
 
 **When to use:** The layer between requirements and test cases. Get agreement here before writing 200 cases.
 **You'll need:** Feature description
+**Category:** Test Design
+**Subcategory:** Test Scenarios
+**Tags:** Test Design, Manual, Scenarios
+**Testing type:** Manual
+**Difficulty:** Beginner
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer identifying test scenarios.
@@ -318,6 +389,19 @@ Now produce the scenario list, grouped.
 
 **When to use:** The core workflow. Turning a feature into executable cases.
 **You'll need:** Feature + **field-by-field detail** (or a screenshot)
+**Category:** Test Design
+**Subcategory:** Test Case Design
+**Tags:** Test Design, Manual, Coverage
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 5
+**Time saved:** 30-40 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `FEATURE_NAME` — Feature name
+- `FIELD_LIST` — Field-by-field detail (name, type, validation, mandatory)
+- `BUSINESS_RULES` — Business rules
 
 ```
 Act as a QA engineer writing test cases for direct Jira bulk upload.
@@ -354,6 +438,61 @@ BUSINESS RULES:
 Now generate the test cases, grouped by module.
 ```
 
+**Short version:**
+```
+Act as a QA engineer writing test cases.
+
+Generate test cases for the feature below as a markdown table: Test Case ID | Title | Steps | Expected Result | Priority.
+
+Cover the happy path, key validation rules, and obvious negative cases. One assertion per test case. Output only the table.
+
+FEATURE: {{FEATURE_NAME}}
+FIELDS: {{FIELD_LIST}}
+BUSINESS RULES: {{BUSINESS_RULES}}
+
+Now generate the test cases.
+```
+
+**Expert version:**
+```
+Act as a senior QA engineer producing an audit-ready test case suite for direct Jira bulk upload.
+
+Generate test cases for the feature below.
+
+FORMAT — a markdown table with exactly these columns:
+{{YOUR_COLUMNS}}
+(default: Test Case ID | Module | Title | Precondition | Test Steps | Test Data |
+Expected Result | Priority | Type | Technique | Risk Justification)
+
+COVERAGE — apply every technique below and name it in the Technique column; do not skip a technique because it feels redundant:
+- Equivalence partitioning: at least one valid and one invalid class per field
+- Boundary value analysis: min-1, min, min+1, max-1, max, max+1
+- Pairwise/combinatorial coverage for any two or more fields that interact (e.g. role × permission, date range pairs)
+- Field-level validation for EVERY field listed below — none skipped
+- Negative and error handling, including malformed/injection-class input (standard published detection strings only)
+- State transitions where applicable
+- Accessibility: keyboard-only completion of the flow, screen-reader label presence
+- Localization: Unicode input (Arabic RTL, CJK, emoji), locale-specific date/number formats
+
+Rules:
+- ONE assertion per test case. Never "verify everything works correctly."
+- Test Steps: numbered, and executable by someone who has never seen this app.
+- Expected Result: observable. A specific message, state, value, or status code.
+  Never "user should be able to..." — that is not verifiable.
+- Risk Justification: one line — why this case matters if it fails in production.
+- If a field's validation rule is not specified below, output
+  [NEEDS CLARIFICATION: what rule?] instead of assuming one.
+- Output ONLY the table. No prose before or after — this is being pasted directly.
+
+FEATURE: {{FEATURE_NAME}}
+FIELDS (name | type | validation | mandatory?):
+{{FIELD_LIST}}
+BUSINESS RULES:
+{{BUSINESS_RULES}}
+
+Now generate the test cases, grouped by module, highest risk first within each module.
+```
+
 ⚠️ **Field detail is what separates a usable output from a generic one.** If the user has a screenshot, tell them to attach it — vision models read forms accurately. If not, the field list field is mandatory. Consider making the card refuse to submit without one.
 
 **Follow-ups (ship all three as buttons):**
@@ -367,6 +506,15 @@ Now generate the test cases, grouped by module.
 
 **When to use:** Any numeric, date, or length-constrained field. Highest defect-per-test ratio of any technique.
 **You'll need:** Field list with ranges
+**Category:** Test Design
+**Subcategory:** Boundary Value Analysis
+**Tags:** Test Design, Boundary, Equivalence
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer applying formal test design techniques.
@@ -402,6 +550,15 @@ Now produce both parts.
 
 **When to use:** Business logic with multiple interacting conditions (discounts, eligibility, pricing, permissions).
 **You'll need:** The rules
+**Category:** Test Design
+**Subcategory:** Decision Tables
+**Tags:** Test Design, Decision Table
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer building a decision table.
@@ -438,6 +595,15 @@ Now produce all five sections.
 
 **When to use:** Anything with a lifecycle — orders, tickets, sessions, approvals, subscriptions.
 **You'll need:** States + allowed transitions
+**Category:** Test Design
+**Subcategory:** State Transition Testing
+**Tags:** Test Design, State Transition
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer designing state transition tests.
@@ -472,6 +638,15 @@ Now produce all six sections.
 
 **When to use:** Config explosion — browsers × OS × roles × payment methods × locales.
 **You'll need:** Parameters + their values
+**Category:** Test Design
+**Subcategory:** Combinatorial Testing
+**Tags:** Test Design, Pairwise, Combinatorial
+**Testing type:** Manual
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer applying combinatorial test design.
@@ -506,6 +681,17 @@ Now produce all five sections.
 
 **When to use:** You need realistic, adversarial data for a form or API.
 **You'll need:** Field list with types
+**Category:** Test Design
+**Subcategory:** Test Data Generation
+**Tags:** Test Design, Data, Boundary, Security
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `FIELD_LIST` — Field list with types and constraints
 
 ```
 Act as a QA engineer preparing test data.
@@ -545,6 +731,19 @@ Now produce the test data table, grouped by field.
 
 **When to use:** Converting a story + AC into feature files.
 **You'll need:** User story + acceptance criteria
+**Category:** Test Design
+**Subcategory:** BDD/Gherkin
+**Tags:** Test Design, BDD, Gherkin
+**Technologies:** Cucumber, Gherkin
+**Testing type:** Manual, Automation
+**Difficulty:** Intermediate
+**Quality:** 5
+**Time saved:** 20-30 min
+**Output:** Gherkin
+**Last updated:** 2026-07-22
+**Variables:**
+- `USER_STORY` — User story
+- `ACCEPTANCE_CRITERIA` — Acceptance criteria
 
 ```
 Act as a BDD practitioner writing feature files.
@@ -590,6 +789,15 @@ Now produce the feature file.
 
 **When to use:** Time-boxed discovery. Finds what scripted tests structurally cannot.
 **You'll need:** The area to explore
+**Category:** Execution
+**Subcategory:** Exploratory Testing
+**Tags:** Exploratory, Manual, Charter
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as an exploratory testing coach using session-based test management.
@@ -629,6 +837,17 @@ Now produce the charters.
 
 **When to use:** Turning rough observation into something a dev can act on with zero follow-up questions.
 **You'll need:** Your raw notes
+**Category:** Execution
+**Subcategory:** Defect Reporting
+**Tags:** Defects, Reporting, Manual
+**Testing type:** Manual
+**Difficulty:** Beginner
+**Quality:** 5
+**Time saved:** 10-15 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
+**Variables:**
+- `YOUR_NOTES` — Your raw notes
 
 ```
 Act as a QA engineer filing a defect.
@@ -678,6 +897,15 @@ Now produce the bug report.
 
 **When to use:** Grooming a defect backlog, or defending a severity call.
 **You'll need:** Bug list
+**Category:** Execution
+**Subcategory:** Defect Triage
+**Tags:** Defects, Triage, Severity, Priority
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 10-15 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA lead triaging defects.
@@ -712,6 +940,18 @@ Now produce the triage table, then the divergence section.
 
 **When to use:** A defect with a likely single causal chain. Fast RCA for a ticket.
 **You'll need:** The problem statement
+**Category:** Execution
+**Subcategory:** Root Cause Analysis
+**Tags:** RCA, Defects, Five Whys
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
+**Variables:**
+- `PROBLEM_STATEMENT` — Problem statement
+- `EVIDENCE` — What we know
 
 ```
 Act as a Root Cause Analyst.
@@ -746,6 +986,15 @@ Then produce:
 
 **When to use:** Cause unknown, or multiple factors likely converged. Team retro after an incident.
 **You'll need:** The problem statement
+**Category:** Execution
+**Subcategory:** Root Cause Analysis
+**Tags:** RCA, Defects, Fishbone
+**Testing type:** Manual
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a Quality Improvement Specialist.
@@ -786,6 +1035,15 @@ CONTEXT: {{WHAT_HAPPENED}}
 
 **When to use:** After any defect reaches production. Answers "why didn't we catch this?"
 **You'll need:** The escaped defect + your test coverage for that area
+**Category:** Execution
+**Subcategory:** Defect Metrics
+**Tags:** Defects, Metrics, Escape Analysis
+**Testing type:** Manual
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA manager conducting escape analysis.
@@ -831,6 +1089,23 @@ WHEN/HOW IT WAS FOUND: {{DISCOVERY}}
 
 **When to use:** Setting up a new automation project from zero.
 **You'll need:** Language, tools, target
+**Category:** Automation
+**Subcategory:** Framework Setup
+**Tags:** Automation, Framework, Setup
+**Technologies:** Selenium, Playwright, pytest, TestNG, JUnit
+**Testing type:** Automation
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 45-60 min
+**Output:** Markdown / code
+**Last updated:** 2026-07-22
+**Variables:**
+- `Java / Python / JS / C#` — Language type=select options=Java,Python,JS,C#
+- `Maven / Gradle / pip / npm` — Build tool type=select options=Maven,Gradle,pip,npm
+- `TestNG / JUnit / pytest / Playwright Test` — Test framework type=select options=TestNG,JUnit,pytest,Playwright Test
+- `Selenium / Playwright / Rest Assured / requests` — Automation library type=select options=Selenium,Playwright,Rest Assured,requests
+- `Allure / ExtentReports / built-in` — Reporting type=select options=Allure,ExtentReports,built-in
+- `IntelliJ / VS Code / PyCharm` — IDE type=select options=IntelliJ,VS Code,PyCharm
 
 ```
 Act as an SDET setting up a new automation framework.
@@ -871,6 +1146,16 @@ Models supply dependency versions from training data, which is always stale. Rea
 
 **When to use:** Structuring UI automation so it survives contact with a changing app.
 **You'll need:** Page description or screenshot, and your existing POM if you have one
+**Category:** Automation
+**Subcategory:** Page Object Model
+**Tags:** Automation, POM, Selenium, Playwright
+**Technologies:** Selenium, Playwright
+**Testing type:** Automation
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Code
+**Last updated:** 2026-07-22
 
 ```
 Act as an SDET writing a Page Object.
@@ -909,6 +1194,16 @@ ELEMENTS: {{ELEMENT_LIST_WITH_LOCATORS}}
 
 **When to use:** Writing an automated UI test from a manual test case.
 **You'll need:** The test case + your framework conventions
+**Category:** Automation
+**Subcategory:** UI Automation
+**Tags:** Automation, UI, Script
+**Technologies:** Selenium, Playwright, Cypress
+**Testing type:** Automation, Frontend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Code
+**Last updated:** 2026-07-22
 
 ```
 Act as an SDET automating a UI test.
@@ -943,6 +1238,16 @@ MANUAL TEST CASE:
 
 **When to use:** Automating an API test.
 **You'll need:** Endpoint details + sample response
+**Category:** Automation
+**Subcategory:** API Automation
+**Tags:** Automation, API, Script
+**Technologies:** REST Assured, requests, Playwright
+**Testing type:** Automation, API, Backend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Code
+**Last updated:** 2026-07-22
 
 ```
 Act as an SDET automating an API test.
@@ -981,6 +1286,16 @@ Rules:
 
 **When to use:** Your suite breaks every time the UI changes.
 **You'll need:** Your locators
+**Category:** Automation
+**Subcategory:** Locator Strategy
+**Tags:** Automation, Locators, Review
+**Technologies:** Selenium, Playwright
+**Testing type:** Automation
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as an SDET reviewing locator robustness.
@@ -1017,6 +1332,17 @@ DOM SNIPPET (if available):
 
 **When to use:** A test that passes sometimes. The highest-value automation card here.
 **You'll need:** The test code + the failure pattern
+**Category:** Automation
+**Subcategory:** Flaky Test Diagnosis
+**Tags:** Automation, Flaky Tests, Diagnosis
+**Testing type:** Automation
+**Difficulty:** Advanced
+**Quality:** 5
+**Time saved:** 30-45 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `CODE` — The test code
 
 ```
 Act as an SDET diagnosing test flakiness.
@@ -1056,6 +1382,74 @@ TEST CODE:
 """
 ```
 
+**Short version:**
+```
+Act as an SDET diagnosing test flakiness.
+
+Identify the most likely sources of non-determinism in the test below, ranked by likelihood.
+
+Check for: hard waits/timing, shared test state, hardcoded test data, unstable locators, real network calls.
+
+Output: Cause | Fix | Confidence (High/Med/Low)
+
+Do NOT suggest retries or longer sleeps as the fix.
+
+FAILURE PATTERN: {{e.g. fails ~1 in 5 runs, only in CI, only in parallel}}
+TEST CODE:
+"""
+{{CODE}}
+"""
+```
+
+**Expert version:**
+```
+Act as a principal SDET running a formal flakiness RCA.
+
+Identify every source of non-determinism in the test below, ranked by likelihood
+of causing the described failure pattern. Go deeper than a surface read — trace
+the actual execution order and timing assumptions.
+
+Check specifically for:
+- TIMING — hard sleeps; waiting on presence instead of the real condition
+  (visible / clickable / network idle / animation complete); race between
+  assertion and state settling; assertion firing before an async state update flushes
+- SHARED STATE — test order dependency; data left behind by a previous run;
+  static/global state; collisions under parallel execution; shared fixtures
+  mutated across tests
+- TEST DATA — hardcoded IDs; data that expires; data another test mutates;
+  assumptions about record count or ordering
+- ENVIRONMENT — network latency; animations; lazy loading; virtualised lists;
+  timezone or clock; CI resource contention; container cold-start variance
+- LOCATORS — index or position based; matches multiple elements; resolves before
+  the element is stable
+- INFRASTRUCTURE DRIFT — browser/driver version mismatch between local and CI;
+  flaky third-party test infrastructure (grid, device farm)
+- EXTERNAL — third-party service; real network calls; unstubbed dependency
+
+Output: Cause | Evidence in the code | Fix | Confidence (High/Med/Low) | Effort to fix (S/M/L)
+
+Then produce:
+- A MINIMAL REPRODUCTION — the smallest version of this test that still exhibits
+  the failure, so it can be run in a tight loop to confirm the fix
+- A FIX, as a ready-to-apply diff against the code below, for the single
+  highest-confidence cause
+
+Rules:
+- Do NOT suggest increasing sleep durations or adding retries. Both hide
+  flakiness rather than fixing it. If retry is genuinely the only option,
+  say so explicitly and justify it.
+- Rank by likelihood given the stated failure pattern — a test that only fails
+  in parallel points somewhere very different from one that fails at 9am daily.
+- If the cause can't be determined from the code alone, say exactly what logs,
+  traces, video, or timing data you'd need.
+
+FAILURE PATTERN: {{e.g. fails ~1 in 5 runs, only in CI, only in parallel}}
+TEST CODE:
+"""
+{{CODE}}
+"""
+```
+
 ⚠️ **"Add a retry" is not a fix.** A retried flaky test is a defect you've agreed to stop seeing. The prompt blocks this on purpose.
 
 ---
@@ -1064,6 +1458,15 @@ TEST CODE:
 
 **When to use:** Before merging test code — yours or a teammate's.
 **You'll need:** The code
+**Category:** Automation
+**Subcategory:** Code Review
+**Tags:** Automation, Code Review
+**Testing type:** Automation
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a senior SDET reviewing test code before merge.
@@ -1102,6 +1505,16 @@ CODE:
 
 **When to use:** Wiring your suite into CI.
 **You'll need:** Repo details + tooling
+**Category:** Automation
+**Subcategory:** CI/CD
+**Tags:** Automation, CI/CD, DevOps
+**Technologies:** Jenkins, GitHub Actions, GitLab CI
+**Testing type:** Automation
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 30-45 min
+**Output:** YAML / config
+**Last updated:** 2026-07-22
 
 ```
 Act as an SDET configuring CI for a test suite.
@@ -1143,6 +1556,16 @@ TEST TYPES: {{unit / api / e2e}}
 
 **When to use:** Verifying an API honours its contract — the tests that catch breaking changes.
 **You'll need:** API spec or sample responses
+**Category:** API Testing
+**Subcategory:** Contract Validation
+**Tags:** API, Contract, Schema, Regression
+**Technologies:** REST, OpenAPI, JSON Schema
+**Testing type:** API, Backend
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as an API test engineer designing contract tests.
@@ -1181,6 +1604,15 @@ API SPEC / SAMPLE:
 
 **When to use:** Before writing a single load script. Most perf testing fails here, not in the tooling.
 **You'll need:** App description + expected load
+**Category:** Performance Testing
+**Subcategory:** Performance Strategy
+**Tags:** Performance, Strategy, Load
+**Testing type:** Performance
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 30-45 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a performance test engineer designing a strategy.
@@ -1226,6 +1658,16 @@ ENVIRONMENT: {{ENV_DETAILS}}
 
 **When to use:** Building the actual script once the strategy exists.
 **You'll need:** Endpoint/flow + load profile
+**Category:** Performance Testing
+**Subcategory:** Load Testing
+**Tags:** Performance, Load, Script
+**Technologies:** k6, JMeter, Gatling
+**Testing type:** Performance
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Code
+**Last updated:** 2026-07-22
 
 ```
 Act as a performance engineer writing a load test script.
@@ -1264,6 +1706,15 @@ Rules:
 
 **When to use:** You have numbers and need to know what they mean.
 **You'll need:** Results data
+**Category:** Performance Testing
+**Subcategory:** Results Analysis
+**Tags:** Performance, Analysis, Metrics
+**Testing type:** Performance
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a performance engineer analysing test results.
@@ -1304,6 +1755,19 @@ RESOURCE METRICS: {{CPU_MEM_DB_IF_AVAILABLE}}
 
 **When to use:** Adding a security lens to functional QA.
 **You'll need:** Feature description + tech context
+**Category:** Security Testing
+**Subcategory:** OWASP Checklist
+**Tags:** Security, OWASP, Checklist
+**Testing type:** Security
+**Difficulty:** Advanced
+**Quality:** 5
+**Time saved:** 30-45 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `FEATURE` — Feature type=text required
+- `AUTH` — Auth model type=select options=OAuth2,JWT,Session,API Key,Basic Auth,None
+- `WHAT_DATA_IT_HANDLES` — Data sensitivity type=textarea required
 
 ```
 Act as a security-aware QA engineer — not a penetration tester.
@@ -1342,6 +1806,15 @@ DATA SENSITIVITY: {{WHAT_DATA_IT_HANDLES}}
 
 **When to use:** WCAG conformance — legally required in many markets.
 **You'll need:** Page/component description
+**Category:** UI Testing
+**Subcategory:** Accessibility
+**Tags:** Accessibility, WCAG, UI
+**Testing type:** Frontend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as an accessibility specialist.
@@ -1375,6 +1848,16 @@ INTERACTIONS: {{WHAT_USERS_DO}}
 
 **When to use:** Native or hybrid mobile testing — where the failure modes have nothing to do with your business logic.
 **You'll need:** App + feature description
+**Category:** Mobile Testing
+**Subcategory:** Coverage Strategy
+**Tags:** Mobile, Coverage, Strategy
+**Technologies:** Android, iOS
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a mobile QA engineer.
@@ -1419,6 +1902,15 @@ PLATFORMS: {{iOS/Android + versions}}
 
 **When to use:** Deciding what to test where — without a 400-combination matrix nobody runs.
 **You'll need:** App type + audience data
+**Category:** UI Testing
+**Subcategory:** Cross-Browser Testing
+**Tags:** Cross-Browser, UI, Matrix
+**Testing type:** Frontend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer designing a cross-browser test matrix.
@@ -1456,6 +1948,16 @@ BUSINESS REQUIREMENTS: {{CONTRACTUAL_SUPPORT_OBLIGATIONS}}
 
 **When to use:** Verifying what the UI says matches what the database holds.
 **You'll need:** Schema + scenario
+**Category:** Database Testing
+**Subcategory:** SQL Validation
+**Tags:** Database, SQL, Validation
+**Technologies:** SQL
+**Testing type:** Database, Backend
+**Difficulty:** Advanced
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** SQL
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer validating data integrity.
@@ -1499,6 +2001,15 @@ SCENARIO: {{WHAT_THE_USER_DID}}
 
 **When to use:** Setting up visual testing without drowning in false positives.
 **You'll need:** App + component list
+**Category:** UI Testing
+**Subcategory:** Visual Regression
+**Tags:** Visual Regression, UI, Strategy
+**Testing type:** Frontend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer designing a visual regression strategy.
@@ -1541,6 +2052,15 @@ TOOL: {{Percy/Applitools/Playwright/Chromatic}}
 
 **When to use:** Any product shipping in more than one language.
 **You'll need:** Feature + target locales
+**Category:** UI Testing
+**Subcategory:** Localization
+**Tags:** Localization, i18n, UI
+**Testing type:** Frontend
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a localization QA engineer.
@@ -1586,6 +2106,17 @@ CURRENT LOCALE: {{BASE}}
 
 **When to use:** Reporting progress and quality with numbers.
 **You'll need:** Raw counts
+**Category:** Reporting
+**Subcategory:** Test Metrics
+**Tags:** Metrics, Reporting
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
+**Variables:**
+- `RAW_COUNTS` — Raw counts
 
 ```
 Act as a QA lead producing test metrics.
@@ -1623,6 +2154,15 @@ DATA:
 
 **When to use:** End of a test cycle. The formal record.
 **You'll need:** Metrics + defect data + what happened
+**Category:** Reporting
+**Subcategory:** Closure Reports
+**Tags:** Reporting, Closure, Summary
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 20-30 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA lead writing a test closure report.
@@ -1661,6 +2201,20 @@ WHAT HAPPENED: {{NARRATIVE}}
 
 **When to use:** The decision meeting. The most consequential thing QA does.
 **You'll need:** Test results + open defects + release context
+**Category:** Reporting
+**Subcategory:** Release Decisions
+**Tags:** Reporting, Release, Decision
+**Testing type:** Manual
+**Difficulty:** Senior QA
+**Quality:** 5
+**Time saved:** 20-30 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
+**Variables:**
+- `RESULTS` — Test results
+- `DEFECTS_WITH_SEVERITY` — Open defects with severity
+- `DATE_PRESSURE_BUSINESS_DRIVERS` — Release context
+- `CAN_WE_ROLL_BACK_HOW_FAST` — Rollback capability
 
 ```
 Act as a QA manager preparing a go/no-go recommendation.
@@ -1693,6 +2247,64 @@ RELEASE CONTEXT: {{DATE_PRESSURE_BUSINESS_DRIVERS}}
 ROLLBACK CAPABILITY: {{CAN_WE_ROLL_BACK_HOW_FAST}}
 ```
 
+**Short version:**
+```
+Act as a QA manager preparing a go/no-go recommendation.
+
+Output:
+1. RECOMMENDATION — GO / GO WITH CONDITIONS / NO-GO. First line.
+2. TOP RISKS — up to 3, each with likelihood and impact.
+3. ROLLBACK TRIGGER — the signal that means roll back, and who decides.
+
+Do NOT soften a NO-GO — say it in those words if the data says so.
+
+TEST RESULTS: {{RESULTS}}
+OPEN DEFECTS: {{DEFECTS_WITH_SEVERITY}}
+RELEASE CONTEXT: {{DATE_PRESSURE_BUSINESS_DRIVERS}}
+ROLLBACK CAPABILITY: {{CAN_WE_ROLL_BACK_HOW_FAST}}
+```
+
+**Expert version:**
+```
+Act as a QA director preparing a go/no-go recommendation for an executive release review.
+
+Output in this order:
+
+1. **RECOMMENDATION** — GO / GO WITH CONDITIONS / NO-GO. First line. Unambiguous.
+2. **CONFIDENCE** — High / Medium / Low, and the single biggest factor driving
+   that confidence level.
+3. **THE THREE FACTS THAT DRIVE IT** — the evidence, not the reasoning.
+4. **CONDITIONS** — if conditional: exactly what must be true before shipping,
+   each with an owner and a verification step.
+5. **OPEN RISKS** — each with likelihood, blast radius (who's affected, how
+   badly), and whether it's a known regression class or novel.
+6. **WHAT WE DID NOT TEST** — and the specific risk we're accepting, ranked by
+   exposure.
+7. **ROLLBACK TRIGGER** — what to watch post-release, the exact number/signal
+   that means roll back, who decides, and how long the decision window is.
+8. **COMMUNICATION PLAN** — who needs to know before the decision, who needs
+   to know after, and what changes in the message if it's a NO-GO vs a GO
+   WITH CONDITIONS.
+9. **WHAT I CANNOT ASSESS** — gaps in my own data, and the fastest way to
+   close each gap if there's time before the decision.
+
+Rules:
+- Lead with the recommendation. Do not build up to it.
+- Do NOT soften a NO-GO. If the data says no-go, say no-go in those words.
+  A hedged no-go gets read as a go.
+- Separate FACT from JUDGEMENT and label which is which.
+- Section 7 is not optional. A release with no defined rollback trigger has no
+  rollback plan, only a rollback hope.
+- Section 8 must name specific roles/functions, not "stakeholders" generically.
+- If the data below is insufficient to make the call, say so and name what's
+  missing rather than producing a confident guess.
+
+TEST RESULTS: {{RESULTS}}
+OPEN DEFECTS: {{DEFECTS_WITH_SEVERITY}}
+RELEASE CONTEXT: {{DATE_PRESSURE_BUSINESS_DRIVERS}}
+ROLLBACK CAPABILITY: {{CAN_WE_ROLL_BACK_HOW_FAST}}
+```
+
 ⚠️ **This is a recommendation, not a decision.** QA presents evidence and a position; the business owns the call. But present the position clearly — a hedged recommendation transfers no information.
 
 ---
@@ -1701,6 +2313,15 @@ ROLLBACK CAPABILITY: {{CAN_WE_ROLL_BACK_HOW_FAST}}
 
 **When to use:** Daily, weekly, or when someone asks "where are we?"
 **You'll need:** What you did / what's blocked
+**Category:** Reporting
+**Subcategory:** Status Reporting
+**Tags:** Reporting, Status, Standup
+**Testing type:** Manual
+**Difficulty:** Beginner
+**Quality:** 3
+**Time saved:** 5-10 min
+**Output:** Markdown
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA engineer writing a status update for {{daily standup / weekly
@@ -1732,6 +2353,15 @@ RAW NOTES:
 
 **When to use:** Answering "are we testing the right things?" — not "how many tests do we have?"
 **You'll need:** Feature list + existing tests
+**Category:** Reporting
+**Subcategory:** Coverage Analysis
+**Tags:** Reporting, Coverage, Gaps
+**Testing type:** Manual
+**Difficulty:** Intermediate
+**Quality:** 4
+**Time saved:** 15-20 min
+**Output:** Markdown table
+**Last updated:** 2026-07-22
 
 ```
 Act as a QA lead analysing test coverage gaps.

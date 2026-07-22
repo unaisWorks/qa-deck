@@ -9,6 +9,8 @@ interface CopyButtonProps {
   copiedLabel?: string;
   className?: string;
   resetMs?: number;
+  /** Called after a successful clipboard write, before the "copied" state flips. */
+  onCopy?: () => void;
 }
 
 const DEFAULT_CLASS =
@@ -27,6 +29,7 @@ export default function CopyButton({
   copiedLabel = "✓ Copied",
   className = DEFAULT_CLASS,
   resetMs = 1500,
+  onCopy,
 }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
@@ -37,6 +40,7 @@ export default function CopyButton({
       // Clipboard API unavailable (non-secure context, permissions) — no-op.
       return;
     }
+    onCopy?.();
     setCopied(true);
     window.setTimeout(() => setCopied(false), resetMs);
   }

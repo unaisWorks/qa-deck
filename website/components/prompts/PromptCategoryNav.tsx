@@ -38,8 +38,7 @@ export default function PromptCategoryNav({ selected, onSelect, counts, totalCou
             type="button"
             onClick={() => onSelect(category)}
             aria-pressed={active}
-            disabled={count === 0}
-            className={`shrink-0 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors border focus:outline-none focus-visible:ring-2 focus-visible:ring-green/60 disabled:opacity-35 disabled:cursor-not-allowed ${
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-colors border focus:outline-none focus-visible:ring-2 focus-visible:ring-green/60 ${
               active
                 ? `${color.bg} ${color.text} ${color.border}`
                 : "text-white/50 hover:text-white hover:bg-white/5 border-transparent"
